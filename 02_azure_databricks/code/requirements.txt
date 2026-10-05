@@ -1,0 +1,18 @@
+# Dependencies for Topic 02 code artifacts
+# Pin databricks-connect to match the cluster DBR (17.3 LTS as of May 2026)
+
+databricks-connect==17.3.*
+databricks-sdk>=0.50.0
+databricks-cli>=0.218.0
+mlflow>=3.0.0
+pyspark==4.0.*    # for local Spark fallback in tests
+delta-spark>=4.0.0
+chispa>=0.10.0     # PySpark DataFrame assertions for tests
+pytest>=8.0.0
+pytest-cov>=5.0.0
+# Anthropic SDK for direct API calls in examples (or via Databricks FMAPI)
+anthropic>=0.40.0
+# LangGraph for the agent example in mlflow3_tracing
+langgraph>=0.3.0
+langchain>=0.3.0
+langchain-anthropic>=0.3.0

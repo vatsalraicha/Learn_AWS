@@ -1,0 +1,49 @@
+# Example DABs bundle — minimal but production-shaped.
+# Pairs with Module 19 (CI/CD with Asset Bundles + Terraform).
+
+bundle:
+  name: claims_platform_demo
+
+include:
+  - resources/*.yml
+
+variables:
+  catalog:
+    description: UC catalog for the bundle's data
+    default: dev_claims
+  env:
+    description: Environment label
+    default: dev
+
+targets:
+  dev:
+    mode: development
+    workspace:
+      host: https://adb-DEV-WORKSPACE-ID.azuredatabricks.net
+    variables:
+      catalog: dev_claims
+      env: dev
+
+  stage:
+    mode: production
+    workspace:
+      host: https://adb-STAGE-WORKSPACE-ID.azuredatabricks.net
+    variables:
+      catalog: stage_claims
+      env: stage
+    permissions:
+      - level: CAN_MANAGE
+        group_name: dataeng-claims
+
+  prod:
+    mode: production
+    workspace:
+      host: https://adb-PROD-WORKSPACE-ID.azuredatabricks.net
+    variables:
+      catalog: prod_phi_claims
+      env: prod
+    permissions:
+      - level: CAN_MANAGE
+        group_name: dataeng-claims-prod
+      - level: CAN_RUN
+        group_name: oncall-platform-admins

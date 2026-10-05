@@ -1,0 +1,72 @@
+resources:
+  jobs:
+    silver_refresh:
+      name: "claims-silver-refresh-${var.env}"
+
+      job_clusters:
+        - job_cluster_key: silver_cluster
+          new_cluster:
+            spark_version: "17.3.x-scala2.13"
+            node_type_id: Standard_DS5_v5
+            num_workers: 4
+            data_security_mode: SINGLE_USER
+            runtime_engine: PHOTON
+            azure_attributes:
+              availability: SPOT_WITH_FALLBACK_AZURE
+              first_on_demand: 1
+              spot_bid_max_price: -1
+            custom_tags:
+              cost_center: cc-123456
+              business_unit: claims
+              workload: etl
+              data_classification: phi
+              environment: ${var.env}
+            policy_id: ${var.job_compute_policy_id}
+
+      tasks:
+        - task_key: ingest_claims
+          job_cluster_key: silver_cluster
+          notebook_task:
+            notebook_path: ../notebooks/silver/ingest_claims_runner.py
+            base_parameters:
+              catalog: ${var.catalog}
+              env: ${var.env}
+
+        - task_key: ingest_eligibility
+          job_cluster_key: silver_cluster
+          notebook_task:
+            notebook_path: ../notebooks/silver/ingest_eligibility_runner.py
+            base_parameters:
+              catalog: ${var.catalog}
+              env: ${var.env}
+
+        - task_key: build_member_month
+          depends_on:
+            - { task_key: ingest_claims }
+            - { task_key: ingest_eligibility }
+          job_cluster_key: silver_cluster
+          notebook_task:
+            notebook_path: ../notebooks/silver/member_month_runner.py
+            base_parameters:
+              catalog: ${var.catalog}
+              env: ${var.env}
+
+        - task_key: data_quality
+          depends_on:
+            - { task_key: build_member_month }
+          job_cluster_key: silver_cluster
+          notebook_task:
+            notebook_path: ../notebooks/checks/run_dq.py
+
+      schedule:
+        quartz_cron_expression: "0 0 6 * * ?"
+        timezone_id: America/New_York
+        pause_status: ${var.env != "prod" ? "PAUSED" : "UNPAUSED"}
+
+      email_notifications:
+        on_failure:
+          - data-platform-oncall@optum.example.com
+        no_alert_for_skipped_runs: true
+
+      max_concurrent_runs: 1
+      timeout_seconds: 7200
