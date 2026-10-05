@@ -1,0 +1,22 @@
+# Don't copy Python caches, venvs, IDE noise, or git metadata into the image
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.venv
+venv
+env
+.env
+.DS_Store
+.git
+.gitignore
+.idea
+.vscode
+*.swp
+*.log
+Dockerfile
+.dockerignore
+README.md
