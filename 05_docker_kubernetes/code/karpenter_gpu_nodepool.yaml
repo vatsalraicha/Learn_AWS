@@ -1,0 +1,94 @@
+# Karpenter NodePool for GPU autoscaling (EKS)
+# References: Topic 05 module 26 (EKS), 31 (training).
+# Two pools: serving (low-latency, smaller GPUs) + training (large multi-GPU nodes).
+
+# === Pool 1: Serving (L4/L40S — cost-efficient inference) ===
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata: { name: gpu-serving }
+spec:
+  template:
+    metadata:
+      labels:
+        workload: ml-serving
+    spec:
+      taints:
+        - { key: nvidia.com/gpu, value: "serving", effect: NoSchedule }
+      requirements:
+        - { key: kubernetes.io/arch, operator: In, values: [amd64] }
+        - { key: node.kubernetes.io/instance-type, operator: In,
+            values: [g6.xlarge, g6.2xlarge, g5.xlarge, g5.2xlarge] }
+        - { key: karpenter.sh/capacity-type, operator: In, values: [on-demand, spot] }
+        - { key: topology.kubernetes.io/zone, operator: In,
+            values: [us-east-1a, us-east-1b, us-east-1c] }
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: gpu-default
+  disruption:
+    consolidationPolicy: WhenEmptyOrUnderutilized
+    consolidateAfter: 5m       # don't churn expensive nodes
+    expireAfter: 720h
+  limits:
+    cpu: "200"
+    memory: 800Gi
+    nvidia.com/gpu: "16"
+
+---
+# === Pool 2: Training (H100/H200 — multi-GPU nodes) ===
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata: { name: gpu-training }
+spec:
+  template:
+    metadata:
+      labels:
+        workload: ml-training
+    spec:
+      taints:
+        - { key: nvidia.com/gpu, value: "training", effect: NoSchedule }
+      requirements:
+        - { key: kubernetes.io/arch, operator: In, values: [amd64] }
+        - { key: node.kubernetes.io/instance-type, operator: In,
+            values: [p5.48xlarge, p5e.48xlarge, p5en.48xlarge] }
+        - { key: karpenter.sh/capacity-type, operator: In, values: [on-demand] }
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: gpu-training-with-efa
+  disruption:
+    consolidationPolicy: WhenEmpty       # don't disrupt running training
+    consolidateAfter: 30s
+    expireAfter: 168h
+  limits:
+    cpu: "1000"
+    memory: 4000Gi
+    nvidia.com/gpu: "64"
+
+---
+# EC2NodeClass for training (EFA-enabled)
+apiVersion: karpenter.k8s.aws/v1
+kind: EC2NodeClass
+metadata: { name: gpu-training-with-efa }
+spec:
+  amiSelectorTerms:
+    - alias: bottlerocket@latest
+  role: KarpenterNodeRole-prod
+  subnetSelectorTerms:
+    - tags: { karpenter.sh/discovery: prod }
+  securityGroupSelectorTerms:
+    - tags: { karpenter.sh/discovery: prod }
+  blockDeviceMappings:
+    - deviceName: /dev/xvda
+      ebs:
+        volumeSize: 200Gi
+        volumeType: gp3
+        encrypted: true
+        kmsKeyID: arn:aws:kms:us-east-1:123:key/<cmk>
+  metadataOptions:
+    httpEndpoint: enabled
+    httpTokens: required           # IMDSv2 only
+    httpPutResponseHopLimit: 1     # block container IMDS access
+  tags:
+    Team: ml-platform
+    CostCenter: ml-training

@@ -1,0 +1,50 @@
+# syntax=docker/dockerfile:1.7
+# Production-grade Dockerfile for a Python ML inference service.
+# References: Topic 05 modules 03 (Dockerfile), 04 (signing), 08 (secrets), 10 (hardening).
+
+ARG PYTHON_BASE=python:3.12-slim@sha256:f6c2fa53...     # pin a digest in real use
+
+# ---- builder stage ----
+FROM ${PYTHON_BASE} AS builder
+
+ENV PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends build-essential gcc curl && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+# Lockfile pinning for reproducibility
+COPY pyproject.toml uv.lock ./
+
+# BuildKit cache mount for pip; secret mount if needed for private indices
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=secret,id=pypi_token,target=/etc/pip.conf \
+    pip install --no-cache-dir uv==0.4.* && \
+    uv pip sync --system --no-cache uv.lock
+
+COPY src/ ./src/
+
+# ---- runtime stage (distroless) ----
+FROM gcr.io/distroless/python3-debian12:nonroot
+
+LABEL org.opencontainers.image.source="https://github.com/myorg/ml-inference" \
+      org.opencontainers.image.revision="${GIT_SHA}" \
+      org.opencontainers.image.version="1.0.0" \
+      org.opencontainers.image.licenses="Apache-2.0"
+
+WORKDIR /app
+COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
+COPY --from=builder /build/src /app/src
+
+USER nonroot:nonroot
+EXPOSE 8080
+
+# Healthcheck — orchestrators (ECS, K8s probes) read this
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD ["/usr/bin/python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz').read()"]
+
+ENTRYPOINT ["python", "-m", "src.app"]
