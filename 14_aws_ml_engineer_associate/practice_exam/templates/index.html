@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Start a Practice Exam · AWS MLA-C01{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>Start a Practice Exam</h1>
+  <p class="lead">
+    Configure the run below. The real exam is <strong>65 questions in 130 minutes</strong>
+    (≈2 min per question) with a <strong>720/1000 scaled (~72%) pass threshold</strong>.
+  </p>
+
+  <form method="POST" action="{{ url_for('start') }}" class="config-form">
+    <fieldset>
+      <legend>Domains (defaults to all)</legend>
+      {% for num, name in section_names.items() %}
+        <label class="check-row">
+          <input type="checkbox" name="sections" value="{{ num }}" checked>
+          <span><strong>Domain {{ num }}</strong> — {{ name }}
+            <em class="muted">({{ section_counts[num] }} available)</em>
+          </span>
+        </label>
+      {% endfor %}
+    </fieldset>
+
+    <fieldset>
+      <legend>How many questions?</legend>
+      <div class="num-row">
+        <label><input type="radio" name="num_questions" value="10"> Quick 10</label>
+        <label><input type="radio" name="num_questions" value="25"> Short 25</label>
+        <label><input type="radio" name="num_questions" value="65" checked> Exam 65 (real length)</label>
+        <label><input type="radio" name="num_questions" value="100"> Long 100</label>
+        <label><input type="radio" name="num_questions" value="250"> Marathon 250</label>
+        <label><input type="radio" name="num_questions" value="0"> All {{ total }}</label>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Order</legend>
+      <label class="check-row">
+        <input type="checkbox" name="shuffle" checked>
+        <span>Shuffle question order (recommended; deterministic order if unchecked)</span>
+      </label>
+    </fieldset>
+
+    <button type="submit" class="primary">Start exam →</button>
+  </form>
+</section>
+
+<section class="card subtle">
+  <h2>How scoring works</h2>
+  <ul>
+    <li>Single-answer questions: pick one option (A–D).</li>
+    <li>Multi-select questions show <code>(Select TWO)</code> or similar in the stem and use checkboxes. You must select ALL correct options exactly.</li>
+    <li>Submit at the end. You'll get a score, a per-domain breakdown, and per-question explanations.</li>
+  </ul>
+</section>
+{% endblock %}

@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}AWS MLA-C01 Practice Exam{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <div class="container">
+      <a href="{{ url_for('index') }}" class="brand">AWS Certified Machine Learning Engineer – Associate (MLA-C01) · Practice Exam</a>
+      <div class="brand-sub">Live version: Apr 2024+ · 500-question bank</div>
+    </div>
+  </header>
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="footer">
+    <div class="container">
+      <span>AWS MLA-C01 Practice Exam · Local practice tool. Question content is original; modeled after the official exam objectives.</span>
+    </div>
+  </footer>
+</body>
+</html>

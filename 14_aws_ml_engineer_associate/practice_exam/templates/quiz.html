@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Exam in progress · {{ questions|length }} questions{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>Exam in Progress</h1>
+  <p class="lead">
+    {{ questions|length }} questions selected. Answer each, then submit at the bottom for instant scoring and explanations.
+  </p>
+  <div class="progress-bar"><div class="progress-fill" id="progress"></div></div>
+  <div class="progress-text"><span id="answered">0</span> / {{ questions|length }} answered</div>
+</section>
+
+<form method="POST" action="{{ url_for('submit', quiz_id=quiz_id) }}" id="quiz-form">
+  {% for q in questions %}
+    <article class="question-card" id="q{{ q.number }}">
+      <div class="qhead">
+        <span class="qnum">Q{{ loop.index }}</span>
+        <span class="qsection">Domain {{ q.section_num }} · {{ section_names[q.section_num].split(' (')[0] }}</span>
+        {% if q.multi_select %}<span class="qbadge">Multi-select</span>{% endif %}
+      </div>
+      <div class="qobj"><strong>Objective:</strong> {{ q.objective }}</div>
+      <div class="qstem">{{ q.stem | md | safe }}</div>
+      <div class="qoptions">
+        {% for letter, text in q.options.items() %}
+          <label class="opt">
+            {% if q.multi_select %}
+              <input type="checkbox" name="q{{ q.number }}" value="{{ letter }}" data-q="{{ q.number }}">
+            {% else %}
+              <input type="radio" name="q{{ q.number }}" value="{{ letter }}" data-q="{{ q.number }}">
+            {% endif %}
+            <span class="opt-letter">{{ letter }}.</span>
+            <span class="opt-text">{{ text | md | safe }}</span>
+          </label>
+        {% endfor %}
+      </div>
+    </article>
+  {% endfor %}
+
+  <div class="sticky-submit">
+    <button type="submit" class="primary big">Submit exam &amp; score →</button>
+    <a href="{{ url_for('index') }}" class="secondary">Cancel</a>
+  </div>
+</form>
+
+<script>
+  const total = {{ questions|length }};
+  const answeredSet = new Set();
+  const progress = document.getElementById('progress');
+  const answeredCount = document.getElementById('answered');
+
+  document.querySelectorAll('input[type=radio], input[type=checkbox]').forEach(el => {
+    el.addEventListener('change', () => {
+      const q = el.dataset.q;
+      const groupChecked = document.querySelectorAll(`input[name="q${q}"]:checked`).length > 0;
+      if (groupChecked) answeredSet.add(q); else answeredSet.delete(q);
+      answeredCount.textContent = answeredSet.size;
+      progress.style.width = (100 * answeredSet.size / total) + '%';
+    });
+  });
+
+  // Warn before navigation if not all answered.
+  document.getElementById('quiz-form').addEventListener('submit', e => {
+    if (answeredSet.size < total) {
+      const unanswered = total - answeredSet.size;
+      if (!confirm(`You have ${unanswered} unanswered question(s). Submit anyway?`)) {
+        e.preventDefault();
+      }
+    }
+  });
+</script>
+{% endblock %}
