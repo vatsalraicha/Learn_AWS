@@ -1,0 +1,181 @@
+# prometheus-alert-rules.yaml — Production alert rule library
+# Pairs with Module 17 (Prometheus)
+#
+# Apply: kubectl apply -f prometheus-alert-rules.yaml
+# Requires kube-prometheus-stack + a Prometheus instance that selects this label
+
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: app-alerts
+  namespace: monitoring
+  labels:
+    release: monitoring
+spec:
+  groups:
+    # ─────────────────────────────────────────────
+    # Group: app SLOs (RED method)
+    # ─────────────────────────────────────────────
+    - name: app.slo
+      interval: 30s
+      rules:
+        - alert: HighErrorRate
+          expr: |
+            sum by (job, namespace) (rate(http_requests_total{status=~"5.."}[5m]))
+              / sum by (job, namespace) (rate(http_requests_total[5m])) > 0.05
+          for: 5m
+          labels:
+            severity: page
+            team: platform
+          annotations:
+            summary: "5xx error rate > 5% on {{ $labels.job }} ({{ $labels.namespace }})"
+            description: "Job {{ $labels.job }} has 5xx error rate of {{ $value | humanizePercentage }} for 5m."
+            runbook: "https://runbooks.example.com/high-error-rate"
+
+        - alert: HighLatencyP99
+          expr: |
+            histogram_quantile(0.99,
+              sum by (job, namespace, le) (rate(http_request_duration_seconds_bucket[5m]))
+            ) > 1.0
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "p99 latency > 1s on {{ $labels.job }}"
+            description: "p99 latency is {{ $value }}s"
+
+        - alert: NoTraffic
+          expr: |
+            sum by (job, namespace) (rate(http_requests_total[5m])) == 0
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "No traffic to {{ $labels.job }} for 15m"
+
+    # ─────────────────────────────────────────────
+    # Group: Kubernetes platform
+    # ─────────────────────────────────────────────
+    - name: k8s.platform
+      interval: 60s
+      rules:
+        - alert: PodCrashLooping
+          expr: rate(kube_pod_container_status_restarts_total[15m]) * 60 * 5 > 0.5
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} restarting"
+            description: "Container {{ $labels.container }} restarting {{ $value }}/5m"
+
+        - alert: PodNotReady
+          expr: |
+            sum by (namespace, pod) (kube_pod_status_phase{phase=~"Pending|Unknown"}) > 0
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} not ready"
+
+        - alert: DeploymentReplicasMismatch
+          expr: |
+            kube_deployment_status_replicas_ready != kube_deployment_spec_replicas
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Deployment {{ $labels.namespace }}/{{ $labels.deployment }} replicas mismatch"
+
+        - alert: NodeNotReady
+          expr: kube_node_status_condition{condition="Ready",status="true"} == 0
+          for: 5m
+          labels:
+            severity: page
+          annotations:
+            summary: "Node {{ $labels.node }} is NotReady"
+
+        - alert: NodeMemoryPressure
+          expr: kube_node_status_condition{condition="MemoryPressure",status="true"} == 1
+          for: 5m
+          labels:
+            severity: page
+          annotations:
+            summary: "Node {{ $labels.node }} under memory pressure"
+
+    # ─────────────────────────────────────────────
+    # Group: PVC + storage
+    # ─────────────────────────────────────────────
+    - name: storage
+      interval: 60s
+      rules:
+        - alert: PVCFillingUp
+          expr: |
+            (kubelet_volume_stats_used_bytes / kubelet_volume_stats_capacity_bytes) > 0.85
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "PVC {{ $labels.persistentvolumeclaim }} > 85% full"
+            description: "{{ $value | humanizePercentage }} used"
+
+        - alert: PVCFillingUpCritical
+          expr: |
+            (kubelet_volume_stats_used_bytes / kubelet_volume_stats_capacity_bytes) > 0.95
+          for: 5m
+          labels:
+            severity: page
+          annotations:
+            summary: "PVC {{ $labels.persistentvolumeclaim }} > 95% full"
+
+    # ─────────────────────────────────────────────
+    # Group: certificate expiration
+    # ─────────────────────────────────────────────
+    - name: certs
+      interval: 6h
+      rules:
+        - alert: KubeletCertExpiringSoon
+          expr: |
+            apiserver_client_certificate_expiration_seconds_count > 0
+            and on(job)
+            histogram_quantile(0.01, sum by (job, le)
+              (rate(apiserver_client_certificate_expiration_seconds_bucket[5m])))
+              < 7 * 24 * 3600
+          labels:
+            severity: page
+          annotations:
+            summary: "Kubelet client certificate expires within 7 days"
+
+        - alert: CertManagerCertExpiringSoon
+          expr: |
+            certmanager_certificate_expiration_timestamp_seconds - time() < 7 * 24 * 3600
+          labels:
+            severity: warning
+          annotations:
+            summary: "Cert {{ $labels.name }} expires in < 7 days"
+
+    # ─────────────────────────────────────────────
+    # Group: security
+    # ─────────────────────────────────────────────
+    - name: security
+      interval: 60s
+      rules:
+        - alert: HighRateOfUnauthorized401
+          expr: |
+            sum by (job, namespace) (rate(http_requests_total{status="401"}[5m])) > 10
+          for: 5m
+          labels:
+            severity: page
+            team: security
+          annotations:
+            summary: "High rate of 401 Unauthorized on {{ $labels.job }} ({{ $value }} req/s)"
+            description: "Possible brute force or credential stuffing"
+
+        - alert: PrivilegedPodCreated
+          expr: |
+            kube_pod_container_status_running{pod=~".+"} == 1
+            and on(pod, namespace) kube_pod_spec_containers_security_context_run_as_privileged == 1
+          labels:
+            severity: warning
+            team: security
+          annotations:
+            summary: "Privileged pod {{ $labels.namespace }}/{{ $labels.pod }} is running"

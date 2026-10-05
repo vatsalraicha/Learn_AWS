@@ -1,0 +1,212 @@
+# opa-gatekeeper-policies.yaml — Policy library
+# Pairs with Module 34 (OPA Gatekeeper)
+#
+# Apply (after Gatekeeper is installed):
+#   kubectl apply -f opa-gatekeeper-policies.yaml
+
+# ────────────────────────────────────────────────────
+# Template 1: Required labels
+# ────────────────────────────────────────────────────
+---
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: k8srequiredlabels
+spec:
+  crd:
+    spec:
+      names: { kind: K8sRequiredLabels }
+      validation:
+        openAPIV3Schema:
+          type: object
+          properties:
+            labels:
+              type: array
+              items: { type: string }
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8srequiredlabels
+        violation[{"msg": msg}] {
+          provided := {label | input.review.object.metadata.labels[label]}
+          required := {label | label := input.parameters.labels[_]}
+          missing := required - provided
+          count(missing) > 0
+          msg := sprintf("Missing required labels: %v", [missing])
+        }
+
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sRequiredLabels
+metadata: { name: ns-must-have-owner-and-cost-center }
+spec:
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Namespace"]
+  enforcementAction: deny
+  parameters:
+    labels: ["owner", "cost-center", "environment"]
+
+# ────────────────────────────────────────────────────
+# Template 2: Reject privileged containers
+# ────────────────────────────────────────────────────
+---
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata: { name: k8sprivilegedcontainers }
+spec:
+  crd:
+    spec:
+      names: { kind: K8sPrivilegedContainers }
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8sprivilegedcontainers
+        violation[{"msg": msg}] {
+          some i
+          container := input.review.object.spec.containers[i]
+          container.securityContext.privileged == true
+          msg := sprintf("Container %v is privileged — not allowed", [container.name])
+        }
+        violation[{"msg": msg}] {
+          some i
+          container := input.review.object.spec.initContainers[i]
+          container.securityContext.privileged == true
+          msg := sprintf("Init container %v is privileged — not allowed", [container.name])
+        }
+
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sPrivilegedContainers
+metadata: { name: no-privileged-containers }
+spec:
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Pod"]
+    excludedNamespaces: ["kube-system", "kube-public", "cilium"]
+  enforcementAction: deny
+
+# ────────────────────────────────────────────────────
+# Template 3: Allowed registries
+# ────────────────────────────────────────────────────
+---
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata: { name: k8sallowedrepos }
+spec:
+  crd:
+    spec:
+      names: { kind: K8sAllowedRepos }
+      validation:
+        openAPIV3Schema:
+          type: object
+          properties:
+            repos:
+              type: array
+              items: { type: string }
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8sallowedrepos
+        violation[{"msg": msg}] {
+          some i
+          container := input.review.object.spec.containers[i]
+          allowed := input.parameters.repos
+          not startswith_any(container.image, allowed)
+          msg := sprintf("Image %v not from allowed registries: %v", [container.image, allowed])
+        }
+        startswith_any(s, prefixes) {
+          some i
+          startswith(s, prefixes[i])
+        }
+
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sAllowedRepos
+metadata: { name: only-approved-registries }
+spec:
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Pod"]
+    excludedNamespaces: ["kube-system", "cilium"]
+  enforcementAction: deny
+  parameters:
+    repos:
+      - "123456789012.dkr.ecr.us-east-1.amazonaws.com/"
+      - "registry.k8s.io/"
+      - "quay.io/cilium/"
+
+# ────────────────────────────────────────────────────
+# Template 4: Reject NodePort services
+# ────────────────────────────────────────────────────
+---
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata: { name: k8snonodeport }
+spec:
+  crd:
+    spec:
+      names: { kind: K8sNoNodePort }
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8snonodeport
+        violation[{"msg": msg}] {
+          input.review.object.kind == "Service"
+          input.review.object.spec.type == "NodePort"
+          msg := "NodePort Services are not allowed — use ClusterIP + Ingress"
+        }
+
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sNoNodePort
+metadata: { name: no-nodeport-services }
+spec:
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Service"]
+  enforcementAction: deny
+
+# ────────────────────────────────────────────────────
+# Template 5: Require resource limits
+# ────────────────────────────────────────────────────
+---
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata: { name: k8scontainerlimits }
+spec:
+  crd:
+    spec:
+      names: { kind: K8sContainerLimits }
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8scontainerlimits
+        violation[{"msg": msg}] {
+          some i
+          container := input.review.object.spec.containers[i]
+          not container.resources.limits.memory
+          msg := sprintf("Container %v must specify memory limit", [container.name])
+        }
+        violation[{"msg": msg}] {
+          some i
+          container := input.review.object.spec.containers[i]
+          not container.resources.requests.cpu
+          msg := sprintf("Container %v must specify CPU request", [container.name])
+        }
+
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sContainerLimits
+metadata: { name: require-resource-limits }
+spec:
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Pod"]
+    excludedNamespaces: ["kube-system"]
+  enforcementAction: warn   # change to "deny" when ready
