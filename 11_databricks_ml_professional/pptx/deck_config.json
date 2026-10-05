@@ -1,0 +1,143 @@
+{
+  "slug": "Databricks_ML_Professional",
+  "cert_name": "Databricks Certified Machine Learning Professional",
+  "exam_version": "September 30, 2025",
+  "logistics": {
+    "Question count": "59 scored multiple-choice",
+    "Duration": "120 minutes (~2 min / question)",
+    "Passing score": "~70% [community]",
+    "Cost": "$200 USD + tax",
+    "Validity": "2 years",
+    "Retake wait": "14 days after 1st fail, longer after subsequent fails",
+    "Delivery": "Online proctored (Webassessor / Kryterion)",
+    "Prereq": "None; ~1 yr Databricks hands-on highly recommended"
+  },
+  "domains": [
+    [
+      "Section 1 \u2014 Model Development",
+      "~45%",
+      [
+        "Advanced MLflow tracking: nested runs, tag CRUD, log_dict",
+        "Custom PyFunc: load_context() + predict() pattern",
+        "Model signatures REQUIRED for UC registration",
+        "Optuna advanced: pruners, samplers, distributed via Ray",
+        "Feature Engineering in UC: point-in-time joins, online tables",
+        "Advanced Spark ML, ensembles, stacking"
+      ]
+    ],
+    [
+      "Section 2 \u2014 MLOps",
+      "~43%",
+      [
+        "DABs (Databricks Asset Bundles) for ML: bundle.yml, resources",
+        "CI/CD with DABs: validate, deploy, run via CLI",
+        "Lakehouse Monitoring deep: snapshot vs time-series profiles",
+        "Drift metrics: KS, JS divergence, PSI, chi-square",
+        "Custom drift metrics via SQL on profile/drift tables",
+        "Model governance: UC ACLs, lineage, lineage queries"
+      ]
+    ],
+    [
+      "Section 3 \u2014 Model Deployment",
+      "~12%",
+      [
+        "Inference Tables auto-capture for endpoints",
+        "Blue/green and canary deployment via traffic split",
+        "Batch + streaming serving patterns",
+        "Endpoint observability and latency budgets"
+      ]
+    ]
+  ],
+  "lookalikes": [
+    [
+      "mlflow.start_run(nested=True)",
+      "Child run under active parent; use for HPO trials"
+    ],
+    [
+      "mlflow.start_run()",
+      "New parent run; nested=False is default"
+    ],
+    [
+      "infer_signature(X, y_pred)",
+      "Required for UC registration"
+    ],
+    [
+      "log_model(input_example=...)",
+      "Enables Test UI on Model Serving endpoint"
+    ],
+    [
+      "Snapshot profile",
+      "Point-in-time stats; non-temporal data"
+    ],
+    [
+      "Time-series profile",
+      "Windowed stats; requires timestamp column"
+    ],
+    [
+      "KS divergence",
+      "Continuous distributions"
+    ],
+    [
+      "JS divergence",
+      "Discrete distributions"
+    ],
+    [
+      "PSI",
+      "Population Stability Index \u2014 bucketed; threshold 0.1/0.25"
+    ],
+    [
+      "DAB validate",
+      "Lints bundle.yml; no deploy"
+    ],
+    [
+      "DAB deploy",
+      "Pushes resources to target workspace"
+    ]
+  ],
+  "facts_to_memorize": [
+    "Custom PyFunc: load_context(self, context) + predict(self, context, model_input)",
+    "Hyperopt/Optuna autolog params but NOT the best model \u2014 explicit re-fit + log_model required",
+    "log_model(registered_model_name='cat.sch.name') one-shot register",
+    "Two-level name = workspace registry; three-level = UC",
+    "DABs CLI: databricks bundle validate / deploy / run",
+    "Inference Tables: enable on endpoint config \u2014 request/response auto-captured",
+    "Lakehouse Monitoring: CREATE MONITOR via SQL on Delta table",
+    "Drift threshold defaults: PSI 0.1 (warn) / 0.25 (alarm)",
+    "MLflow nested runs: mlflow.start_run(nested=True) inside active parent"
+  ],
+  "pitfalls": [
+    "Forgetting model signature \u2192 UC registration fails silently",
+    "Logging from Hyperopt's objective without nested=True (flat run pollution)",
+    "Custom PyFunc loading artifacts in __init__ instead of load_context",
+    "Confusing bundle validate (lint only) with bundle deploy (push)",
+    "Using PSI on continuous data without bucketing",
+    "Setting traffic split before warming up the new endpoint version",
+    "Inference Tables enabled but never wired to monitoring",
+    "Two-level model name registers to workspace, not UC \u2014 silent fork"
+  ],
+  "study_weeks": [
+    [
+      "Week 1",
+      "Section 1 (45%) \u2014 modules 01-06; advanced MLflow + PyFunc + Optuna"
+    ],
+    [
+      "Week 2",
+      "Section 2 part 1 (MLOps platform) \u2014 modules 07-09; DABs"
+    ],
+    [
+      "Week 3",
+      "Section 2 part 2 (Monitoring) \u2014 modules 10-12; drift + governance"
+    ],
+    [
+      "Week 4",
+      "Section 3 + final review \u2014 modules 13-16; full timed practice"
+    ]
+  ],
+  "resources": [
+    "Official exam guide PDF (Sept 30, 2025)",
+    "Databricks Academy: Machine Learning at Scale + Advanced ML Operations",
+    "Career_upskill Topic 11 modules 01-16 + 3 quizzes",
+    "FACTS.md \u2014 drift metrics + DABs + PyFunc patterns",
+    "MLflow 2.x docs (exam tests 2.x surface; MLflow 3 not on this version)"
+  ]
+}
