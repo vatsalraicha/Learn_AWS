@@ -1,0 +1,199 @@
+{
+  "slug": "Databricks_Spark_Dev_Associate",
+  "cert_name": "Databricks Certified Associate Developer for Apache Spark",
+  "exam_version": "October 30, 2025",
+  "logistics": {
+    "Question count": "45 scored multiple-choice",
+    "Duration": "90 minutes (~2 min / question)",
+    "Passing score": "~70% [community, not officially published]",
+    "Cost": "$200 USD + tax",
+    "Validity": "2 years",
+    "Spark version": "Apache Spark 3.5.x (NOT 4.0)",
+    "Code language": "Python ONLY \u2014 Scala removed",
+    "Delivery": "Online proctored OR in-person"
+  },
+  "domains": [
+    [
+      "Domain 1 \u2014 Spark Architecture and Components",
+      "20%",
+      [
+        "Driver, executor, cluster manager, application/job/stage/task",
+        "Cluster modes; standalone vs YARN vs Kubernetes",
+        "Lazy evaluation, DAG, narrow vs wide transformations",
+        "Shuffle, partitioning, RDD lineage"
+      ]
+    ],
+    [
+      "Domain 2 \u2014 Using Spark SQL",
+      "20%",
+      [
+        "Catalog, database, table, view",
+        "createOrReplaceTempView vs createGlobalTempView",
+        "Built-in functions: pyspark.sql.functions module",
+        "Window functions: partitionBy, orderBy, rowsBetween, rangeBetween"
+      ]
+    ],
+    [
+      "Domain 3 \u2014 DataFrame / Dataset API",
+      "30%",
+      [
+        "DataFrame creation, schema (StructType, StructField, types)",
+        "select / filter / where / withColumn / drop",
+        "groupBy + agg with multiple aggregations",
+        "join types: inner, outer, left, right, semi, anti, cross",
+        "union vs unionByName",
+        "Reading/writing: csv, json, parquet, delta"
+      ]
+    ],
+    [
+      "Domain 4 \u2014 Troubleshooting and Tuning",
+      "10%",
+      [
+        "Spark UI: jobs, stages, SQL tabs",
+        "AQE (Adaptive Query Execution) defaults",
+        "Broadcast join hints, skew join handling",
+        "Caching: persist, cache, unpersist, storage levels"
+      ]
+    ],
+    [
+      "Domain 5 \u2014 Structured Streaming",
+      "10%",
+      [
+        "DataStreamReader / DataStreamWriter",
+        "Trigger modes: default, processingTime, once, availableNow",
+        "Output modes: append, complete, update",
+        "Watermarks: withWatermark, late data handling"
+      ]
+    ],
+    [
+      "Domain 6 \u2014 Spark Connect",
+      "5%",
+      [
+        "Client/server decoupled architecture",
+        "Spark Connect client: pyspark[connect]",
+        "Remote SparkSession.builder.remote('sc://host:port')",
+        "Limitations: no SparkContext, no RDD API"
+      ]
+    ],
+    [
+      "Domain 7 \u2014 Pandas API on Spark",
+      "5%",
+      [
+        "import pyspark.pandas as ps",
+        "ps.DataFrame vs pandas.DataFrame",
+        "to_pandas() vs to_spark() conversions",
+        "Index types: sequence (default), distributed, distributed-sequence"
+      ]
+    ]
+  ],
+  "lookalikes": [
+    [
+      "union",
+      "Union by COLUMN POSITION \u2014 same schema required"
+    ],
+    [
+      "unionByName",
+      "Union by COLUMN NAME \u2014 allowMissingColumns optional"
+    ],
+    [
+      "createOrReplaceTempView",
+      "Session-scoped; lost when SparkSession ends"
+    ],
+    [
+      "createGlobalTempView",
+      "Cross-session; lives in global_temp database"
+    ],
+    [
+      "cache()",
+      "Equivalent to persist(MEMORY_AND_DISK)"
+    ],
+    [
+      "persist(level)",
+      "Choose StorageLevel (DISK_ONLY, MEMORY_ONLY_SER, etc.)"
+    ],
+    [
+      "groupBy().agg()",
+      "Wide transformation; triggers shuffle"
+    ],
+    [
+      "groupByKey",
+      "Avoid \u2014 collects values; prefer reduceByKey/agg"
+    ],
+    [
+      "inner join",
+      "Default \u2014 only matching rows"
+    ],
+    [
+      "left_anti",
+      "Rows in left WITHOUT a match in right"
+    ],
+    [
+      "left_semi",
+      "Rows in left WITH a match in right (no right columns)"
+    ],
+    [
+      "trigger(processingTime='1 minute')",
+      "Micro-batch every minute"
+    ],
+    [
+      "trigger(availableNow=True)",
+      "Process all available data once, then stop"
+    ],
+    [
+      "trigger(once=True)",
+      "DEPRECATED \u2014 use availableNow"
+    ]
+  ],
+  "facts_to_memorize": [
+    "Spark version tested: 3.5.x \u2014 NOT 4.0; Variant type, default ANSI, collations are OUT of scope",
+    "Code language: Python ONLY \u2014 Scala removed from this exam",
+    "DBR/Unity Catalog/Delta operations are NOT tested \u2014 pure OSS Spark",
+    "Delta is in scope only as readable format: delta.`path`",
+    "AQE is ON by default in Spark 3.5",
+    "Narrow transformations: map, filter, select, withColumn (no shuffle)",
+    "Wide transformations: groupBy, join, distinct, orderBy (shuffle)",
+    "Default shuffle partitions: 200 (spark.sql.shuffle.partitions)",
+    "withWatermark required for stateful aggregations with append mode",
+    "Spark Connect: remote() URI scheme is sc://"
+  ],
+  "pitfalls": [
+    "Assuming Spark 4.0 features are tested \u2014 they are NOT",
+    "Expecting Scala code \u2014 Python only",
+    "Using union when columns are in different order \u2014 use unionByName",
+    "Confusing cache() with persist() \u2014 cache is just persist(MEMORY_AND_DISK)",
+    "Forgetting withWatermark on streaming aggregations \u2192 unbounded state",
+    "Using trigger(once=True) on the exam \u2014 it's deprecated, expect availableNow",
+    "Mixing up output mode 'append' vs 'complete' for stateful streams",
+    "Expecting Delta-specific operations like OPTIMIZE on the exam (not tested)",
+    "Using SparkContext under Spark Connect (not available)"
+  ],
+  "study_weeks": [
+    [
+      "Week 1",
+      "Domain 1 (20%) \u2014 architecture + lazy eval + DAG"
+    ],
+    [
+      "Week 2",
+      "Domains 2+3 (50%) \u2014 Spark SQL + DataFrame API"
+    ],
+    [
+      "Week 3",
+      "Domain 4 (10%) \u2014 tuning + Spark UI + AQE"
+    ],
+    [
+      "Week 4",
+      "Domains 5-7 (20%) \u2014 Streaming + Spark Connect + Pandas API"
+    ],
+    [
+      "Exam week",
+      "Official sample questions + timed practice"
+    ]
+  ],
+  "resources": [
+    "Official exam guide PDF (October 30, 2025)",
+    "Apache Spark 3.5 docs: spark.apache.org/docs/3.5.0/",
+    "Career_upskill Topic 13 modules 01-14 + 5 quizzes (incl. official sample walkthrough)",
+    "FACTS.md \u2014 Spark 3.5 scope boundaries; Python-only confirmation",
+    "Databricks Academy: Spark Programming with Python"
+  ]
+}
