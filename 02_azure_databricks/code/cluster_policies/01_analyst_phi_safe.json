@@ -1,0 +1,45 @@
+{
+  "_comment": "Analyst persona — interactive, smallish, hard auto-term, PHI-safe (only deid catalogs reachable due to data_classification allowlist).",
+  "spark_version": {
+    "type": "regex",
+    "pattern": "^17\\.[0-9]+\\.x-scala2\\.13$"
+  },
+  "node_type_id": {
+    "type": "allowlist",
+    "values": [
+      "Standard_DS4_v5",
+      "Standard_DS5_v5",
+      "Standard_E8ds_v5"
+    ]
+  },
+  "data_security_mode": {
+    "type": "fixed",
+    "value": "USER_ISOLATION"
+  },
+  "autotermination_minutes": {
+    "type": "range",
+    "minValue": 10,
+    "maxValue": 60,
+    "defaultValue": 30
+  },
+  "num_workers": {
+    "type": "range",
+    "maxValue": 8
+  },
+  "custom_tags.cost_center": {
+    "type": "regex",
+    "pattern": "^cc-[0-9]{6}$"
+  },
+  "custom_tags.business_unit": {
+    "type": "allowlist",
+    "values": ["claims", "member", "provider", "rx", "stars", "actuarial"]
+  },
+  "custom_tags.data_classification": {
+    "type": "allowlist",
+    "values": ["non-phi", "deid"]
+  },
+  "init_scripts.0.volumes.destination": {
+    "type": "fixed",
+    "value": "/Volumes/_admin/init/analyst_v3.sh"
+  }
+}

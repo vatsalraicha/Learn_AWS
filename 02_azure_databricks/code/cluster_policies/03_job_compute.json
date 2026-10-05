@@ -1,0 +1,52 @@
+{
+  "_comment": "Job (production, no humans) — Photon-default, Jobs Compute, Spot workers, narrow.",
+  "cluster_type": {
+    "type": "fixed",
+    "value": "job"
+  },
+  "spark_version": {
+    "type": "regex",
+    "pattern": "^17\\.[0-9]+\\.x-scala2\\.13$"
+  },
+  "node_type_id": {
+    "type": "allowlist",
+    "values": [
+      "Standard_DS4_v5",
+      "Standard_DS5_v5",
+      "Standard_E8ds_v5",
+      "Standard_E16ds_v5"
+    ]
+  },
+  "data_security_mode": {
+    "type": "fixed",
+    "value": "SINGLE_USER"
+  },
+  "runtime_engine": {
+    "type": "fixed",
+    "value": "PHOTON"
+  },
+  "azure_attributes.availability": {
+    "type": "fixed",
+    "value": "SPOT_WITH_FALLBACK_AZURE"
+  },
+  "azure_attributes.first_on_demand": {
+    "type": "fixed",
+    "value": 1
+  },
+  "num_workers": {
+    "type": "range",
+    "maxValue": 50
+  },
+  "custom_tags.cost_center": {
+    "type": "regex",
+    "pattern": "^cc-[0-9]{6}$"
+  },
+  "custom_tags.workload": {
+    "type": "fixed",
+    "value": "etl"
+  },
+  "custom_tags.data_classification": {
+    "type": "allowlist",
+    "values": ["non-phi", "deid", "phi"]
+  }
+}

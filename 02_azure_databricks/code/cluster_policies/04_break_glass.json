@@ -1,0 +1,33 @@
+{
+  "_comment": "Platform Admin / Break-Glass — broad, ticket-required. Permission to USE this policy is granted to on-call SRE group only and audited monthly.",
+  "spark_version": {
+    "type": "unlimited",
+    "isOptional": false
+  },
+  "node_type_id": {
+    "type": "unlimited"
+  },
+  "data_security_mode": {
+    "type": "allowlist",
+    "values": ["SINGLE_USER", "USER_ISOLATION"]
+  },
+  "autotermination_minutes": {
+    "type": "range",
+    "minValue": 5,
+    "maxValue": 120,
+    "defaultValue": 60
+  },
+  "num_workers": {
+    "type": "range",
+    "maxValue": 100
+  },
+  "custom_tags.cost_center": {
+    "type": "fixed",
+    "value": "cc-platform-admin"
+  },
+  "custom_tags.purpose": {
+    "type": "regex",
+    "pattern": "^break-glass-(incident|investigation|maintenance)-[A-Z]+-[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+    "_comment_purpose": "Forces every cluster to carry an incident ticket reference (e.g., 'break-glass-incident-OPTUM-2026-05-10'). Lands in system.access.audit for compliance review."
+  }
+}
