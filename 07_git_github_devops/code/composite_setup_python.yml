@@ -1,0 +1,83 @@
+# Composite action — Setup Python + uv + cache + install deps
+# Place at: capitalone/actions-org/setup-python-ml/action.yml
+# Consumed via:
+#   - uses: capitalone/actions-org/setup-python-ml@v2
+#     with:
+#       python-version: "3.12"
+#       install-extras: "dev,train"
+
+name: "Setup Python ML environment"
+description: "Install Python, uv, project deps with caching — Capital One standard"
+
+inputs:
+  python-version:
+    description: "Python version"
+    required: false
+    default: "3.11"
+  install-extras:
+    description: "Optional pyproject extras (comma-separated)"
+    required: false
+    default: "dev"
+  working-directory:
+    description: "Working directory containing pyproject.toml"
+    required: false
+    default: "."
+  cache-key-prefix:
+    description: "Cache key prefix (override for non-pyproject.toml setups)"
+    required: false
+    default: "uv"
+
+outputs:
+  python-path:
+    description: "Path to the Python executable"
+    value: ${{ steps.setup.outputs.python-path }}
+  python-version:
+    description: "Resolved Python version"
+    value: ${{ steps.setup.outputs.python-version }}
+  cache-hit:
+    description: "Whether deps were restored from cache"
+    value: ${{ steps.cache.outputs.cache-hit }}
+
+runs:
+  using: composite
+  steps:
+    - id: setup
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install uv
+      shell: bash
+      run: pip install --upgrade uv
+
+    - id: cache
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/uv
+          ~/.cache/huggingface
+          ~/.cache/torch
+          ${{ inputs.working-directory }}/.venv
+        key: ${{ inputs.cache-key-prefix }}-${{ runner.os }}-${{ inputs.python-version }}-${{ hashFiles(format('{0}/pyproject.toml', inputs.working-directory), format('{0}/uv.lock', inputs.working-directory)) }}
+        restore-keys: |
+          ${{ inputs.cache-key-prefix }}-${{ runner.os }}-${{ inputs.python-version }}-
+          ${{ inputs.cache-key-prefix }}-${{ runner.os }}-
+
+    - name: Install deps
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        EXTRAS=""
+        if [ -n "${{ inputs.install-extras }}" ]; then
+          IFS=',' read -ra EXTRA_LIST <<< "${{ inputs.install-extras }}"
+          for e in "${EXTRA_LIST[@]}"; do EXTRAS="$EXTRAS --extra $e"; done
+        fi
+        uv sync $EXTRAS --frozen
+
+    - name: Show installed
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        echo "::group::Installed packages"
+        uv pip list
+        echo "::endgroup::"

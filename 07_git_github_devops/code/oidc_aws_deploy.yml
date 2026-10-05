@@ -1,0 +1,144 @@
+# OIDC to AWS — SageMaker deploy workflow
+# Demonstrates: OIDC trust + environment gating + scoped role + SageMaker endpoint update
+
+name: Deploy to SageMaker
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      target-env:
+        description: "Target environment"
+        type: choice
+        options: [dev, staging, prod]
+        default: staging
+      model-package-arn:
+        description: "Model package ARN to deploy"
+        type: string
+        required: true
+
+concurrency:
+  group: deploy-${{ inputs.target-env || 'staging' }}
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Validate inputs
+        run: |
+          if [ -z "${{ inputs.model-package-arn }}" ]; then
+            echo "model-package-arn required for workflow_dispatch"
+            [ "${{ github.event_name }}" == "workflow_dispatch" ] && exit 1
+          fi
+
+  deploy:
+    needs: validate
+    environment: ${{ inputs.target-env || 'staging' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.DEPLOY_ROLE_ARN }}
+          role-session-name: gh-deploy-${{ github.run_id }}-${{ github.run_attempt }}
+          aws-region: ${{ vars.AWS_REGION }}
+          mask-aws-account-id: true
+
+      - name: Verify identity
+        run: aws sts get-caller-identity
+
+      - name: Create new endpoint config
+        id: cfg
+        run: |
+          ENDPOINT_NAME="${{ vars.ENDPOINT_NAME }}"
+          CFG_NAME="${ENDPOINT_NAME}-cfg-$(date +%s)-${GITHUB_SHA::8}"
+
+          MODEL_PACKAGE_ARN="${{ inputs.model-package-arn }}"
+          if [ -z "$MODEL_PACKAGE_ARN" ]; then
+            # On push: get latest Approved version from registry
+            MODEL_PACKAGE_ARN=$(aws sagemaker list-model-packages \
+              --model-package-group-name "${{ vars.MODEL_PACKAGE_GROUP }}" \
+              --model-approval-status Approved \
+              --sort-by CreationTime --sort-order Descending --max-results 1 \
+              --query 'ModelPackageSummaryList[0].ModelPackageArn' --output text)
+          fi
+
+          # Create the model from the package
+          MODEL_NAME="${ENDPOINT_NAME}-model-${GITHUB_SHA::8}"
+          aws sagemaker create-model \
+            --model-name "$MODEL_NAME" \
+            --containers ModelPackageName="$MODEL_PACKAGE_ARN" \
+            --execution-role-arn "${{ vars.SAGEMAKER_EXECUTION_ROLE_ARN }}"
+
+          # Create endpoint config
+          aws sagemaker create-endpoint-config \
+            --endpoint-config-name "$CFG_NAME" \
+            --production-variants "[{
+              \"VariantName\":\"variant-1\",
+              \"ModelName\":\"$MODEL_NAME\",
+              \"InitialInstanceCount\":${{ vars.INITIAL_INSTANCE_COUNT }},
+              \"InstanceType\":\"${{ vars.INSTANCE_TYPE }}\"
+            }]"
+
+          echo "cfg_name=$CFG_NAME" >> $GITHUB_OUTPUT
+          echo "model_package_arn=$MODEL_PACKAGE_ARN" >> $GITHUB_OUTPUT
+
+      - name: Update endpoint
+        run: |
+          aws sagemaker update-endpoint \
+            --endpoint-name "${{ vars.ENDPOINT_NAME }}" \
+            --endpoint-config-name "${{ steps.cfg.outputs.cfg_name }}"
+
+      - name: Wait for InService
+        run: |
+          aws sagemaker wait endpoint-in-service \
+            --endpoint-name "${{ vars.ENDPOINT_NAME }}"
+
+      - name: Smoke test
+        run: |
+          aws sagemaker-runtime invoke-endpoint \
+            --endpoint-name "${{ vars.ENDPOINT_NAME }}" \
+            --content-type application/json \
+            --body '{"feature1": 1.0, "feature2": "test"}' \
+            response.json
+          cat response.json
+          python -c "
+          import json
+          r = json.load(open('response.json'))
+          assert 'prediction' in r or 'predictions' in r, 'No prediction in response'
+          print('Smoke test passed')
+          "
+
+      - name: Summary
+        if: success()
+        run: |
+          echo "## Deployment summary" >> $GITHUB_STEP_SUMMARY
+          echo "- Environment: ${{ inputs.target-env || 'staging' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Endpoint: ${{ vars.ENDPOINT_NAME }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Config: ${{ steps.cfg.outputs.cfg_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Model package: ${{ steps.cfg.outputs.model_package_arn }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Commit: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+
+      - name: Notify Slack
+        if: always()
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_ML_DEPLOYS }}
+          STATUS: ${{ job.status }}
+        run: |
+          STATUS_EMOJI="✅"
+          [ "$STATUS" != "success" ] && STATUS_EMOJI="❌"
+          curl -X POST "$SLACK_WEBHOOK" -d "{
+            \"text\": \"$STATUS_EMOJI Deployed ${{ vars.ENDPOINT_NAME }} to ${{ inputs.target-env || 'staging' }} (run ${{ github.run_id }})\"
+          }"

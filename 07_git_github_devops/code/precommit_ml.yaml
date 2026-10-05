@@ -1,0 +1,123 @@
+# .pre-commit-config.yaml — Capital One-grade ML repo
+# Install: pip install pre-commit && pre-commit install --hook-type commit-msg --hook-type pre-push
+# Run: pre-commit run --all-files
+# Update: pre-commit autoupdate
+
+default_language_version:
+  python: python3.11
+
+default_stages: [pre-commit]
+
+repos:
+  # ─── General hygiene ────────────────────────────────────────────
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+        args: [--unsafe]
+      - id: check-toml
+      - id: check-json
+      - id: check-added-large-files
+        args: ['--maxkb=500']
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: detect-private-key
+      - id: debug-statements
+      - id: mixed-line-ending
+        args: ['--fix=lf']
+
+  # ─── Python: ruff (linter + formatter, replaces flake8+black+isort+pyupgrade) ─
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9
+    hooks:
+      - id: ruff
+        args: [--fix]
+        types_or: [python, pyi, jupyter]
+      - id: ruff-format
+        types_or: [python, pyi, jupyter]
+
+  # ─── Type checking ──────────────────────────────────────────────
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.11.2
+    hooks:
+      - id: mypy
+        additional_dependencies:
+          - types-requests
+          - pydantic
+          - sqlalchemy[mypy]
+        args: [--strict, --ignore-missing-imports]
+        exclude: ^(tests/|notebooks/|scripts/)
+
+  # ─── Python security (bandit) ───────────────────────────────────
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.7.10
+    hooks:
+      - id: bandit
+        args: [-c, pyproject.toml]
+        additional_dependencies: ['bandit[toml]']
+        exclude: ^tests/
+
+  # ─── Secret detection — local first line of defense ─────────────
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.4
+    hooks:
+      - id: gitleaks
+
+  # ─── Notebook output stripping ──────────────────────────────────
+  - repo: https://github.com/kynan/nbstripout
+    rev: 0.7.1
+    hooks:
+      - id: nbstripout
+
+  # ─── Jupytext auto-sync (if using .py-paired notebooks) ────────
+  - repo: https://github.com/mwouts/jupytext
+    rev: v1.16.4
+    hooks:
+      - id: jupytext
+        args: [--sync]
+
+  # ─── YAML linting ───────────────────────────────────────────────
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.35.1
+    hooks:
+      - id: yamllint
+        args:
+          - '-d'
+          - '{extends: default, rules: {line-length: {max: 120}}}'
+
+  # ─── GitHub Actions workflow linting ────────────────────────────
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.3
+    hooks:
+      - id: actionlint
+
+  # ─── Dockerfile linting ─────────────────────────────────────────
+  - repo: https://github.com/hadolint/hadolint
+    rev: v2.13.0-beta
+    hooks:
+      - id: hadolint-docker
+
+  # ─── Conventional Commits (commit-msg hook) ─────────────────────
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v3.4.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+        args: [feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert]
+
+  # ─── Local custom hooks ─────────────────────────────────────────
+  - repo: local
+    hooks:
+      - id: no-notebook-imports-in-src
+        name: "Production src/ should not import from notebooks/"
+        entry: bash -c 'if grep -r "from notebooks" src/ tests/ 2>/dev/null; then exit 1; fi'
+        language: system
+        pass_filenames: false
+
+      - id: model-card-up-to-date
+        name: "MODEL_CARD.md updated if models/ changed"
+        entry: bash -c 'if git diff --cached --name-only | grep -q "^src/models/"; then if ! git diff --cached --name-only | grep -q "^MODEL_CARD.md$"; then echo "Models changed but MODEL_CARD.md not updated"; exit 1; fi; fi'
+        language: system
+        pass_filenames: false

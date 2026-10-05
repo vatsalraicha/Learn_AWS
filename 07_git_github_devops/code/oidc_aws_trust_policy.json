@@ -1,0 +1,108 @@
+{
+  "_comment": "OIDC trust policy template for GitHub Actions → AWS IAM role assumption.",
+  "_usage": [
+    "1. Replace AWS_ACCOUNT_ID with your account.",
+    "2. Replace ORG and REPO with your GitHub org/repo.",
+    "3. Replace ENVIRONMENT with the GitHub Environment name (prod, staging, dev).",
+    "4. Optionally restrict to a specific reusable workflow via job_workflow_ref.",
+    "5. NEVER use ForAllValues:* in Allow conditions — use StringEquals or StringLike.",
+    "6. Validate with: aws iam simulate-principal-policy ..."
+  ],
+
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "_comment_pattern_1": "Pattern 1 — Environment-bound (prod-grade)",
+      "Sid": "AllowGitHubActionsProdDeploy",
+      "Effect": "Allow",
+      "Principal": {
+        "Federated": "arn:aws:iam::AWS_ACCOUNT_ID:oidc-provider/token.actions.githubusercontent.com"
+      },
+      "Action": "sts:AssumeRoleWithWebIdentity",
+      "Condition": {
+        "StringEquals": {
+          "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+          "token.actions.githubusercontent.com:sub": "repo:ORG/REPO:environment:ENVIRONMENT"
+        }
+      }
+    },
+    {
+      "_comment_pattern_2": "Pattern 2 — Reusable-workflow-only access (InnerSource pattern, requires central blessed workflow)",
+      "_disabled": true,
+      "Sid": "AllowOnlyViaCentralReusableWorkflow",
+      "Effect": "Allow",
+      "Principal": {
+        "Federated": "arn:aws:iam::AWS_ACCOUNT_ID:oidc-provider/token.actions.githubusercontent.com"
+      },
+      "Action": "sts:AssumeRoleWithWebIdentity",
+      "Condition": {
+        "StringEquals": {
+          "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+          "token.actions.githubusercontent.com:sub": "repo:ORG/REPO:environment:prod"
+        },
+        "StringLike": {
+          "token.actions.githubusercontent.com:job_workflow_ref": "ORG/workflows-org/.github/workflows/sagemaker-deploy.yml@refs/heads/main"
+        }
+      }
+    },
+    {
+      "_comment_pattern_3": "Pattern 3 — Branch-only (less strict, for dev/staging roles)",
+      "_disabled": true,
+      "Sid": "AllowMainBranchOnly",
+      "Effect": "Allow",
+      "Principal": {
+        "Federated": "arn:aws:iam::AWS_ACCOUNT_ID:oidc-provider/token.actions.githubusercontent.com"
+      },
+      "Action": "sts:AssumeRoleWithWebIdentity",
+      "Condition": {
+        "StringEquals": {
+          "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
+        },
+        "StringLike": {
+          "token.actions.githubusercontent.com:sub": "repo:ORG/REPO:ref:refs/heads/main"
+        }
+      }
+    },
+    {
+      "_comment_pattern_4": "Pattern 4 — Tag-based release-deploy",
+      "_disabled": true,
+      "Sid": "AllowSemverTagsOnly",
+      "Effect": "Allow",
+      "Principal": {
+        "Federated": "arn:aws:iam::AWS_ACCOUNT_ID:oidc-provider/token.actions.githubusercontent.com"
+      },
+      "Action": "sts:AssumeRoleWithWebIdentity",
+      "Condition": {
+        "StringEquals": {
+          "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+          "token.actions.githubusercontent.com:ref_type": "tag"
+        },
+        "StringLike": {
+          "token.actions.githubusercontent.com:sub": "repo:ORG/REPO:ref:refs/tags/v*.*.*"
+        }
+      }
+    },
+    {
+      "_comment_pattern_5": "Pattern 5 — Multi-repo (e.g., shared model registry write)",
+      "_disabled": true,
+      "Sid": "AllowAnyMLServiceRepo",
+      "Effect": "Allow",
+      "Principal": {
+        "Federated": "arn:aws:iam::AWS_ACCOUNT_ID:oidc-provider/token.actions.githubusercontent.com"
+      },
+      "Action": "sts:AssumeRoleWithWebIdentity",
+      "Condition": {
+        "StringEquals": {
+          "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+          "token.actions.githubusercontent.com:repository_owner": "ORG"
+        },
+        "StringLike": {
+          "token.actions.githubusercontent.com:sub": [
+            "repo:ORG/ml-service-*:ref:refs/heads/main",
+            "repo:ORG/ml-service-*:environment:prod"
+          ]
+        }
+      }
+    }
+  ]
+}
