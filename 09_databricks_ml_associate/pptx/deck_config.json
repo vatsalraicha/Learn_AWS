@@ -1,0 +1,153 @@
+{
+  "slug": "Databricks_ML_Associate",
+  "cert_name": "Databricks Certified Machine Learning Associate",
+  "exam_version": "March 1, 2025",
+  "logistics": {
+    "Question count": "48 scored (multiple-choice, occasional multi-select)",
+    "Duration": "90 minutes (~1m 52s / question)",
+    "Passing score": "~70% (not officially published)",
+    "Cost": "$200 USD + tax",
+    "Validity": "2 years",
+    "Retake wait": "14 days between attempts",
+    "Delivery": "Online proctored (Kryterion WebAssessor)",
+    "Code language": "Python (SQL may appear for data manipulation)"
+  },
+  "domains": [
+    [
+      "Domain 1 \u2014 Databricks Machine Learning",
+      "38%",
+      [
+        "DBR ML runtime, GPU runtimes, cluster types",
+        "AutoML UI + API, glass-box generated notebooks",
+        "Feature Engineering in UC (FeatureEngineeringClient, FeatureLookup)",
+        "MLflow tracking: runs, autologging per flavor, MlflowClient",
+        "UC Model Registry: aliases (@champion/@challenger), tags, set_registry_uri('databricks-uc')"
+      ]
+    ],
+    [
+      "Domain 2 \u2014 ML Workflows / Data Processing",
+      "19%",
+      [
+        "Spark DataFrame .summary(), outlier removal (std-dev / IQR)",
+        "Missing-value imputation (mean / median / mode by shape)",
+        "Pandas API on Spark (pyspark.pandas) \u2014 when to use vs pandas vs Spark DF",
+        "StringIndexer, OneHotEncoder, VectorAssembler, Imputer",
+        "When NOT to OHE (tree-based models don't need it)"
+      ]
+    ],
+    [
+      "Domain 3 \u2014 Model Development",
+      "31%",
+      [
+        "RandomForestClassifier, GBTRegressor, LogisticRegression, KMeans",
+        "Estimators vs transformers \u2014 pattern recognition",
+        "Hyperopt fmin, hp.choice (returns INDEX!), tpe.suggest, SparkTrials",
+        "Optuna create_study, trial.suggest_*, n_jobs (no SparkTrials equivalent)",
+        "CrossValidator vs TrainValidationSplit, ParamGridBuilder",
+        "Total fits math: |grid| \u00d7 k folds \u00d7 (+1 final refit)"
+      ]
+    ],
+    [
+      "Domain 4 \u2014 Model Deployment",
+      "12%",
+      [
+        "mlflow.pyfunc.spark_udf for batch scoring",
+        "Streaming inference via DLT",
+        "Mosaic AI Model Serving: endpoints, served entities, traffic split",
+        "Choose batch vs streaming vs real-time by latency/throughput"
+      ]
+    ]
+  ],
+  "lookalikes": [
+    [
+      "hp.choice",
+      "Returns the INDEX (int), NOT the value \u2014 wrap result if you want the actual choice"
+    ],
+    [
+      "set_registered_model_alias",
+      "Sets @alias \u2014 multi-version, multi-alias allowed"
+    ],
+    [
+      "set_model_version_tag",
+      "Per-version key/value metadata \u2014 does NOT promote"
+    ],
+    [
+      "FeatureEngineeringClient (UC)",
+      "create_table \u2014 Unity Catalog-native \u2014 current API"
+    ],
+    [
+      "FeatureStoreClient (workspace)",
+      "register_table \u2014 DEPRECATED since 0.17.0"
+    ],
+    [
+      "CrossValidator",
+      "k-fold; trains numFolds \u00d7 |grid| + 1 models"
+    ],
+    [
+      "TrainValidationSplit",
+      "Single holdout; trains |grid| + 1 models"
+    ],
+    [
+      "BinaryClassificationEvaluator",
+      "AUC, areaUnderROC, areaUnderPR"
+    ],
+    [
+      "MulticlassClassificationEvaluator",
+      "f1, accuracy, weightedPrecision/Recall"
+    ],
+    [
+      "@champion (UC alias)",
+      "Replaces 'Production' stage; resolve via models:/cat.sch.mdl@champion"
+    ],
+    [
+      "None \u2192 Staging \u2192 Production \u2192 Archived",
+      "LEGACY workspace registry \u2014 deprecated"
+    ]
+  ],
+  "facts_to_memorize": [
+    "MLflow registry URI for UC: mlflow.set_registry_uri('databricks-uc')",
+    "Three-level namespace: catalog.schema.model \u2014 required for UC",
+    "Hyperopt removed from DBR ML 17+; last shipped in 16.4 LTS (May 2025)",
+    "Hyperopt STILL on the March 1 2025 exam \u2014 know fmin, hp.*, tpe.suggest, SparkTrials",
+    "Optuna parallelism: n_jobs (joblib) \u2014 there is NO SparkTrials equivalent",
+    "AutoML generates glass-box notebooks \u2014 you can edit them",
+    "Tree-based models do NOT need OneHotEncoding; linear/distance/NN models DO",
+    "Median imputation for skewed; mean for symmetric; mode for categorical",
+    "Mosaic AI Model Serving \u2014 'served entities' replaces 'served models' terminology"
+  ],
+  "pitfalls": [
+    "hp.choice returns INDEX \u2014 easy 1-point loss if you forget",
+    "Forgetting mlflow.set_registry_uri('databricks-uc') writes to workspace registry instead",
+    "Confusing CrossValidator's 'trains numFolds models' (it trains numFolds \u00d7 |grid| + 1)",
+    "Using FeatureStoreClient instead of FeatureEngineeringClient in new code",
+    "Assuming Hyperopt is gone \u2014 it's still tested on March 1, 2025 guide",
+    "Using legacy stages (Staging/Production) instead of UC aliases",
+    "Confusing pyspark.pandas (Pandas API on Spark) with pandas-on-databricks",
+    "Forgetting that XGBoost/sklearn flavors autolog parameters but NOT the full best model from hyperopt"
+  ],
+  "study_weeks": [
+    [
+      "Week 1",
+      "Domain 1 (38%) \u2014 modules 01-05; quiz 01"
+    ],
+    [
+      "Week 2",
+      "Domains 2+3 \u2014 modules 06-12; quizzes 02-03"
+    ],
+    [
+      "Week 3",
+      "Domain 4 \u2014 modules 13-14; quiz 04; FACTS.md skim; book exam"
+    ],
+    [
+      "Exam week",
+      "Full-length timed practice + targeted weakness review"
+    ]
+  ],
+  "resources": [
+    "Official exam guide PDF (March 1, 2025): databricks.com/sites/default/files/2025-02/databricks-certified-machine-learning-associate-exam-guide-1-mar-2025.pdf",
+    "Databricks Academy: Machine Learning Associate self-paced",
+    "Career_upskill Topic 09 modules 01-14 + 4 quizzes (~145 Qs, 3\u00d7 exam length)",
+    "FACTS.md \u2014 atomic facts with last-verified dates",
+    "Verify exam guide URL 2 weeks before exam date"
+  ]
+}
