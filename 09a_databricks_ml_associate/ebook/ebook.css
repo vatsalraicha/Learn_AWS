@@ -1,0 +1,178 @@
+/* Typography and layout for the RAG ebook EPUB build.
+   Designed for reflowable e-readers (Apple Books, Kindle via Calibre, Calibre Viewer). */
+
+@namespace epub "http://www.idpf.org/2007/ops";
+
+body {
+  font-family: "Charter", "Georgia", "Iowan Old Style", "Palatino", serif;
+  line-height: 1.6;
+  margin: 0.8em;
+  color: #1c2638;
+  -webkit-hyphens: auto;
+  hyphens: auto;
+  text-align: justify;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: "Avenir Next", "Helvetica Neue", "Arial", sans-serif;
+  font-weight: 600;
+  color: #185a9d;
+  page-break-after: avoid;
+  text-align: left;
+  -webkit-hyphens: none;
+  hyphens: none;
+}
+
+h1 {
+  font-size: 1.9em;
+  margin-top: 1.4em;
+  margin-bottom: 0.6em;
+  padding-bottom: 0.2em;
+  border-bottom: 2px solid #185a9d;
+  page-break-before: always;
+}
+
+h2 {
+  font-size: 1.4em;
+  margin-top: 1.5em;
+  margin-bottom: 0.4em;
+  color: #2a3a55;
+}
+
+h3 {
+  font-size: 1.15em;
+  margin-top: 1.2em;
+  color: #2a3a55;
+}
+
+h4 {
+  font-size: 1em;
+  font-style: italic;
+  color: #4a5a75;
+}
+
+p {
+  margin: 0.5em 0;
+  text-indent: 0;
+  orphans: 2;
+  widows: 2;
+}
+
+a, a:link, a:visited {
+  color: #185a9d;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+blockquote {
+  margin: 1em 1.5em;
+  padding-left: 1em;
+  border-left: 3px solid #b8c5d5;
+  color: #4a5a75;
+  font-style: italic;
+}
+
+code {
+  font-family: "Menlo", "Consolas", "Courier New", monospace;
+  font-size: 0.88em;
+  background: #f4f6f8;
+  padding: 0.1em 0.3em;
+  border-radius: 3px;
+  color: #b8442b;
+}
+
+pre {
+  font-family: "Menlo", "Consolas", "Courier New", monospace;
+  font-size: 0.82em;
+  background: #f4f6f8;
+  border: 1px solid #d5dce5;
+  border-radius: 4px;
+  padding: 0.8em 1em;
+  margin: 1em 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  page-break-inside: avoid;
+  line-height: 1.4;
+  color: #1c2638;
+}
+
+pre code {
+  background: transparent;
+  padding: 0;
+  color: inherit;
+}
+
+table {
+  border-collapse: collapse;
+  margin: 1em 0;
+  width: 100%;
+  font-size: 0.9em;
+  page-break-inside: avoid;
+}
+
+th, td {
+  border: 1px solid #c6d0db;
+  padding: 0.45em 0.7em;
+  vertical-align: top;
+  text-align: left;
+}
+
+th {
+  background: #e8eef5;
+  font-weight: 600;
+  color: #185a9d;
+}
+
+tr:nth-child(even) td {
+  background: #f7f9fb;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 1em auto;
+  page-break-inside: avoid;
+}
+
+hr {
+  border: 0;
+  border-top: 1px solid #c6d0db;
+  margin: 1.5em 0;
+}
+
+ul, ol {
+  padding-left: 1.5em;
+  margin: 0.5em 0;
+}
+
+li {
+  margin: 0.2em 0;
+}
+
+/* Inline emphasis tweaks */
+strong {
+  color: #1c2638;
+}
+
+em {
+  color: #2a3a55;
+}
+
+/* Details/summary (used in quizzes if ever included) */
+details {
+  background: #f7f9fb;
+  border: 1px solid #c6d0db;
+  border-radius: 4px;
+  padding: 0.5em 1em;
+  margin: 1em 0;
+}
+
+summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: #185a9d;
+}
