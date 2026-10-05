@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Databricks ML Associate Practice{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <div class="container">
+      <a href="{{ url_for('index') }}" class="brand">Databricks ML Associate · Practice Exam</a>
+      <div class="brand-sub">Live version: Mar 1, 2025 · 200-question bank</div>
+    </div>
+  </header>
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="footer">
+    <div class="container">
+      <span>Local practice tool. Question content is original; modeled after the official exam objectives.</span>
+    </div>
+  </footer>
+</body>
+</html>

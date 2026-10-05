@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Exam results · {{ correct }}/{{ total }}{% endblock %}
+{% block content %}
+<section class="card results-summary {{ 'pass' if passed else 'fail' }}">
+  <h1>{{ 'Pass' if passed else 'Below pass' }} · {{ score_pct }}%</h1>
+  <p class="big-score">{{ correct }} correct of {{ total }}</p>
+  <p>Pass threshold: 70%. Aim for ≥80% on practice to give yourself margin.</p>
+
+  <h2>Section breakdown</h2>
+  <table class="breakdown">
+    <thead>
+      <tr><th>Section</th><th>Correct</th><th>Total</th><th>Score</th></tr>
+    </thead>
+    <tbody>
+      {% for sec_num, sec_data in section_breakdown.items() | sort %}
+        <tr>
+          <td>§{{ sec_num }} {{ section_names[sec_num] }}</td>
+          <td>{{ sec_data.correct }}</td>
+          <td>{{ sec_data.total }}</td>
+          <td>{{ (100 * sec_data.correct / sec_data.total) | round(1) }}%</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="actions">
+    <a href="{{ url_for('index') }}" class="primary">Start another exam</a>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Question review</h2>
+  <p class="muted">Filter:
+    <a href="#" data-filter="all" class="filter active">All</a> ·
+    <a href="#" data-filter="wrong" class="filter">Wrong only</a> ·
+    <a href="#" data-filter="right" class="filter">Right only</a> ·
+    <a href="#" data-filter="unanswered" class="filter">Not answered</a>
+  </p>
+
+  {% for r in results %}
+    {% set q = r.question %}
+    {% set verdict_class = 'right' if r.is_correct else ('unanswered' if not r.selected else 'wrong') %}
+    <article class="review-card {{ verdict_class }}">
+      <div class="qhead">
+        <span class="qnum">Q{{ loop.index }}</span>
+        <span class="qsection">§{{ q.section_num }} · {{ section_names[q.section_num].split(' (')[0] }}</span>
+        {% if q.multi_select %}<span class="qbadge">Multi-select</span>{% endif %}
+        <span class="verdict {{ verdict_class }}">
+          {% if r.is_correct %}✓ Correct
+          {% elif not r.selected %}○ Not answered
+          {% else %}✗ Incorrect{% endif %}
+        </span>
+      </div>
+      <div class="qobj"><strong>Objective:</strong> {{ q.objective }}</div>
+      <div class="qstem">{{ q.stem | md | safe }}</div>
+      <div class="qoptions readonly">
+        {% for letter, text in q.options.items() %}
+          {% set is_correct_opt = letter in r.correct_set %}
+          {% set is_user_opt = letter in r.selected %}
+          <div class="opt
+            {% if is_correct_opt %}opt-correct{% endif %}
+            {% if is_user_opt and not is_correct_opt %}opt-userwrong{% endif %}
+            {% if is_user_opt and is_correct_opt %}opt-userright{% endif %}">
+            <span class="opt-letter">
+              {% if is_correct_opt %}✓{% elif is_user_opt %}✗{% else %}·{% endif %}
+              {{ letter }}.
+            </span>
+            <span class="opt-text">{{ text | md | safe }}</span>
+          </div>
+        {% endfor %}
+      </div>
+      <div class="answer-row">
+        <strong>Your answer:</strong>
+        {% if r.selected %}{{ r.selected | join(', ') }}{% else %}<em>(not answered)</em>{% endif %}
+        &nbsp;·&nbsp;
+        <strong>Correct:</strong> {{ r.correct_set | join(', ') }}
+      </div>
+      <div class="explanation">{{ q.explanation | md | safe }}</div>
+    </article>
+  {% endfor %}
+</section>
+
+<script>
+  document.querySelectorAll('.filter').forEach(el => {
+    el.addEventListener('click', e => {
+      e.preventDefault();
+      document.querySelectorAll('.filter').forEach(f => f.classList.remove('active'));
+      el.classList.add('active');
+      const mode = el.dataset.filter;
+      document.querySelectorAll('.review-card').forEach(card => {
+        if (mode === 'all') card.style.display = '';
+        else card.style.display = card.classList.contains(mode) ? '' : 'none';
+      });
+    });
+  });
+</script>
+{% endblock %}
