@@ -1,0 +1,177 @@
+---
+# ansible-deploy-nginx.yaml — Ansible playbook for nginx deploy + hardening
+# Pairs with Module 16 (Ansible) + Module 56 (Linux server deployment)
+#
+# Usage: ansible-playbook -i inventory.aws_ec2.yml ansible-deploy-nginx.yaml --ask-become-pass
+#
+# Pattern: Terraform provisions EC2 with tags → Ansible dynamic inventory picks them up
+# → this playbook configures them.
+
+- name: Configure web servers
+  hosts: tag_Role_web
+  become: true
+  gather_facts: true
+
+  vars:
+    nginx_version: "1.27.*"
+    nginx_server_name: "{{ domain_name | default('example.com') }}"
+    app_port: 3000
+    deploy_user: deploy
+    fail2ban_enabled: true
+
+  pre_tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Upgrade all packages
+      apt:
+        upgrade: dist
+        autoclean: true
+        autoremove: true
+      tags: [upgrade]
+
+  tasks:
+    # ─── Hardening ───
+    - name: Create deploy user
+      user:
+        name: "{{ deploy_user }}"
+        groups: sudo
+        shell: /bin/bash
+        state: present
+
+    - name: Ensure SSH dir exists for deploy user
+      file:
+        path: "/home/{{ deploy_user }}/.ssh"
+        state: directory
+        mode: '0700'
+        owner: "{{ deploy_user }}"
+        group: "{{ deploy_user }}"
+
+    - name: Add public key for deploy user
+      authorized_key:
+        user: "{{ deploy_user }}"
+        key: "{{ lookup('file', 'files/deploy_id_ed25519.pub') }}"
+
+    - name: Disable root SSH login
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?PermitRootLogin'
+        line: 'PermitRootLogin no'
+      notify: Restart sshd
+
+    - name: Disable password authentication
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?PasswordAuthentication'
+        line: 'PasswordAuthentication no'
+      notify: Restart sshd
+
+    # ─── Firewall ───
+    - name: Configure UFW defaults
+      ufw:
+        direction: "{{ item.direction }}"
+        policy: "{{ item.policy }}"
+      loop:
+        - { direction: incoming, policy: deny }
+        - { direction: outgoing, policy: allow }
+
+    - name: Allow UFW rules
+      ufw:
+        rule: allow
+        port: "{{ item }}"
+      loop: [22, 80, 443]
+
+    - name: Enable UFW
+      ufw:
+        state: enabled
+
+    # ─── fail2ban ───
+    - name: Install fail2ban
+      apt:
+        name: fail2ban
+        state: present
+      when: fail2ban_enabled
+
+    - name: Enable + start fail2ban
+      systemd:
+        name: fail2ban
+        enabled: true
+        state: started
+      when: fail2ban_enabled
+
+    # ─── Unattended upgrades ───
+    - name: Install unattended-upgrades
+      apt:
+        name: unattended-upgrades
+        state: present
+
+    - name: Enable unattended-upgrades
+      copy:
+        dest: /etc/apt/apt.conf.d/20auto-upgrades
+        content: |
+          APT::Periodic::Update-Package-Lists "1";
+          APT::Periodic::Unattended-Upgrade "1";
+
+    # ─── nginx ───
+    - name: Install nginx
+      apt:
+        name: "nginx={{ nginx_version }}"
+        state: present
+        update_cache: true
+
+    - name: Render nginx site config
+      template:
+        src: templates/nginx-site.conf.j2
+        dest: /etc/nginx/sites-available/app
+        mode: '0644'
+      notify: Reload nginx
+
+    - name: Enable nginx site
+      file:
+        src: /etc/nginx/sites-available/app
+        dest: /etc/nginx/sites-enabled/app
+        state: link
+      notify: Reload nginx
+
+    - name: Remove default nginx site
+      file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+      notify: Reload nginx
+
+    - name: Ensure nginx is running + enabled
+      systemd:
+        name: nginx
+        state: started
+        enabled: true
+
+    # ─── Docker (for running the app) ───
+    - name: Install Docker
+      apt:
+        name: docker.io
+        state: present
+
+    - name: Add deploy user to docker group
+      user:
+        name: "{{ deploy_user }}"
+        groups: docker
+        append: true
+
+    - name: Ensure Docker is running + enabled
+      systemd:
+        name: docker
+        state: started
+        enabled: true
+
+  handlers:
+    - name: Restart sshd
+      systemd:
+        name: ssh
+        state: restarted
+
+    - name: Reload nginx
+      systemd:
+        name: nginx
+        state: reloaded

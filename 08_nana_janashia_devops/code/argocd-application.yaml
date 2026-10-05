@@ -1,0 +1,127 @@
+# argocd-application.yaml — ArgoCD Application + ApplicationSet reference
+# Pairs with Module 33 (ArgoCD)
+#
+# Apply: kubectl apply -f argocd-application.yaml
+
+# ──────────────────────────────────────────────
+# AppProject — scope what Applications in this project can deploy
+# ──────────────────────────────────────────────
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: my-app
+  namespace: argocd
+spec:
+  description: "my-app team's Applications"
+  sourceRepos:
+    - 'https://github.com/myorg/my-app-manifests'
+    - 'https://github.com/myorg/cluster-config'
+  destinations:
+    - namespace: 'my-app-*'
+      server: '*'
+  clusterResourceWhitelist:
+    - { group: '', kind: 'Namespace' }
+  namespaceResourceWhitelist:
+    - { group: '*', kind: '*' }
+  roles:
+    - name: my-app-deployer
+      policies:
+        - p, proj:my-app:my-app-deployer, applications, sync, my-app/*, allow
+        - p, proj:my-app:my-app-deployer, applications, action/*, my-app/*, allow
+      groups: [my-org:my-app-team]
+---
+
+# ──────────────────────────────────────────────
+# Application — single deployment
+# ──────────────────────────────────────────────
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: my-app-prod
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: my-app
+  source:
+    repoURL: https://github.com/myorg/my-app-manifests
+    targetRevision: main
+    path: overlays/prod
+    kustomize:
+      images:
+        - image=ghcr.io/myorg/my-app:v1.2.3
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: my-app-prod
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ApplyOutOfSyncOnly=true
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  revisionHistoryLimit: 20
+---
+
+# ──────────────────────────────────────────────
+# ApplicationSet — one Application per env from a single template
+# ──────────────────────────────────────────────
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: my-app-multi-env
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - { env: dev, branch: develop, cluster: dev-cluster, namespace: my-app-dev }
+          - { env: stg, branch: main,    cluster: stg-cluster, namespace: my-app-stg }
+          - { env: prd, branch: main,    cluster: prd-cluster, namespace: my-app-prd, manual: true }
+  template:
+    metadata:
+      name: 'my-app-{{env}}'
+      labels: { env: '{{env}}' }
+    spec:
+      project: my-app
+      source:
+        repoURL: https://github.com/myorg/my-app-manifests
+        targetRevision: '{{branch}}'
+        path: 'overlays/{{env}}'
+      destination:
+        name: '{{cluster}}'
+        namespace: '{{namespace}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+---
+
+# ──────────────────────────────────────────────
+# App-of-Apps root — bootstrap many Applications from a single Git path
+# ──────────────────────────────────────────────
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/myorg/cluster-config
+    targetRevision: main
+    path: applications/
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }

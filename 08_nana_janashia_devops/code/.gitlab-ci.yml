@@ -1,0 +1,177 @@
+# .gitlab-ci.yml — full DevSecOps pipeline reference
+# Pairs with: Modules 40-46 (GitLab CI/CD), Modules 22-24 (DevSecOps scanning)
+
+stages:
+  - test
+  - security
+  - build
+  - scan
+  - deploy-dev
+  - dast
+  - deploy-prod
+
+variables:
+  PYTHON_VERSION: "3.13"
+  KANIKO_IMAGE: gcr.io/kaniko-project/executor:v1.23.0-debug
+  TRIVY_IMAGE: aquasec/trivy:0.58.0
+  ECR_REGISTRY: 123456789012.dkr.ecr.us-east-1.amazonaws.com
+  APP_NAME: my-app
+  IMAGE_TAG: ${ECR_REGISTRY}/${APP_NAME}:${CI_COMMIT_SHORT_SHA}
+
+default:
+  image: python:${PYTHON_VERSION}-slim
+  cache:
+    key:
+      files: [requirements.txt]
+    paths: [.venv/, .cache/pip/]
+
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_TAG'
+
+# ─────────────────────────────────────────────────
+# Stage: test
+# ─────────────────────────────────────────────────
+unit-tests:
+  stage: test
+  before_script:
+    - python -m venv .venv && source .venv/bin/activate
+    - pip install -r requirements.txt -r requirements-dev.txt
+  script:
+    - pytest --cov=src --cov-report=xml --cov-report=term --junitxml=report.xml
+  artifacts:
+    when: always
+    reports:
+      junit: report.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+  coverage: '/TOTAL.*\s+(\d+\%)/'
+
+lint:
+  stage: test
+  before_script:
+    - pip install ruff mypy
+  script:
+    - ruff check src/
+    - mypy src/
+
+# ─────────────────────────────────────────────────
+# Stage: security
+# ─────────────────────────────────────────────────
+include:
+  - template: Jobs/SAST.gitlab-ci.yml
+  - template: Jobs/Secret-Detection.gitlab-ci.yml
+  - template: Jobs/Dependency-Scanning.gitlab-ci.yml
+
+gitleaks:
+  stage: security
+  image: zricethezav/gitleaks:latest
+  script:
+    - gitleaks detect --source . --verbose --report-format sarif --report-path gitleaks.sarif
+  artifacts:
+    reports:
+      sast: gitleaks.sarif
+    when: always
+
+trivy-fs:
+  stage: security
+  image: ${TRIVY_IMAGE}
+  script:
+    - trivy fs --severity CRITICAL,HIGH --exit-code 1 --format json -o trivy-fs.json .
+  artifacts:
+    paths: [trivy-fs.json]
+    when: always
+
+# ─────────────────────────────────────────────────
+# Stage: build
+# ─────────────────────────────────────────────────
+build-image:
+  stage: build
+  image: ${KANIKO_IMAGE}
+  id_tokens:
+    GITLAB_OIDC_TOKEN: { aud: https://gitlab.com }
+  variables:
+    AWS_ROLE_ARN: arn:aws:iam::123456789012:role/gitlab-build
+  script:
+    - >
+      export $(aws sts assume-role-with-web-identity
+      --role-arn $AWS_ROLE_ARN
+      --role-session-name "gitlab-${CI_PIPELINE_ID}"
+      --web-identity-token "$GITLAB_OIDC_TOKEN"
+      --duration-seconds 3600
+      --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]'
+      --output text | awk '{print "AWS_ACCESS_KEY_ID="$1, "AWS_SECRET_ACCESS_KEY="$2, "AWS_SESSION_TOKEN="$3}')
+    - mkdir -p /kaniko/.docker
+    - echo '{"credsStore":"ecr-login"}' > /kaniko/.docker/config.json
+    - >
+      /kaniko/executor
+      --context $CI_PROJECT_DIR
+      --dockerfile $CI_PROJECT_DIR/Dockerfile
+      --destination $IMAGE_TAG
+      --cache=true
+      --cache-repo $ECR_REGISTRY/$APP_NAME/cache
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
+# ─────────────────────────────────────────────────
+# Stage: scan
+# ─────────────────────────────────────────────────
+trivy-image:
+  stage: scan
+  image: ${TRIVY_IMAGE}
+  script:
+    - trivy image --severity CRITICAL,HIGH --exit-code 1 ${IMAGE_TAG}
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
+# ─────────────────────────────────────────────────
+# Stage: deploy-dev
+# ─────────────────────────────────────────────────
+deploy-dev:
+  stage: deploy-dev
+  image: alpine/k8s:1.31.4
+  script:
+    - kubectl config use-context my-group/my-project:dev-agent
+    - kubectl set image deployment/${APP_NAME} ${APP_NAME}=${IMAGE_TAG} -n dev
+    - kubectl rollout status deployment/${APP_NAME} -n dev --timeout=5m
+  environment:
+    name: dev
+    url: https://dev.example.com
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
+# ─────────────────────────────────────────────────
+# Stage: dast
+# ─────────────────────────────────────────────────
+dast-baseline:
+  stage: dast
+  image: ghcr.io/zaproxy/zaproxy:stable
+  script:
+    - zap-baseline.py -t https://dev.example.com -r dast-report.html -J dast.json -m 10
+  artifacts:
+    paths: [dast-report.html, dast.json]
+    when: always
+  allow_failure: true
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
+# ─────────────────────────────────────────────────
+# Stage: deploy-prod (manual gate)
+# ─────────────────────────────────────────────────
+deploy-prod:
+  stage: deploy-prod
+  image: alpine/k8s:1.31.4
+  script:
+    - kubectl config use-context my-group/my-project:prd-agent
+    - kubectl set image deployment/${APP_NAME} ${APP_NAME}=${IMAGE_TAG} -n prod
+    - kubectl rollout status deployment/${APP_NAME} -n prod --timeout=10m
+  environment:
+    name: production
+    url: https://example.com
+    deployment_tier: production
+  rules:
+    - if: '$CI_COMMIT_TAG'
+      when: manual

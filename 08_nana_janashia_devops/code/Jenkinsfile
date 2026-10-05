@@ -1,0 +1,180 @@
+// Jenkinsfile — production CI/CD pipeline pattern
+// Builds + scans + signs + pushes to ECR + deploys to EKS via GitOps
+// Pairs with: Modules 09 (Jenkins), 12 (EKS), 23 (CD Pipeline), 24 (Image Scanning)
+
+pipeline {
+  agent {
+    kubernetes {
+      yaml '''
+        apiVersion: v1
+        kind: Pod
+        spec:
+          serviceAccountName: jenkins-agent
+          containers:
+          - name: python
+            image: python:3.13-slim
+            command: ["sleep", "infinity"]
+          - name: kaniko
+            image: gcr.io/kaniko-project/executor:v1.23.0-debug
+            command: ["sleep", "infinity"]
+            volumeMounts:
+            - name: docker-config
+              mountPath: /kaniko/.docker
+          - name: trivy
+            image: aquasec/trivy:0.58.0
+            command: ["sleep", "infinity"]
+          - name: cosign
+            image: gcr.io/projectsigstore/cosign:v2.4.1
+            command: ["sleep", "infinity"]
+          - name: kubectl
+            image: alpine/k8s:1.31.4
+            command: ["sleep", "infinity"]
+          volumes:
+          - name: docker-config
+            emptyDir: {}
+      '''
+    }
+  }
+
+  options {
+    timeout(time: 60, unit: 'MINUTES')
+    timestamps()
+    buildDiscarder(logRotator(numToKeepStr: '30'))
+  }
+
+  environment {
+    AWS_REGION    = 'us-east-1'
+    AWS_ACCOUNT   = '123456789012'
+    ECR_REGISTRY  = "${AWS_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+    APP_NAME      = 'my-app'
+    GITOPS_REPO   = 'git@github.com:myorg/k8s-manifests.git'
+  }
+
+  stages {
+    stage('Checkout') {
+      steps {
+        checkout scm
+        script {
+          env.GIT_SHA = sh(returnStdout: true, script: 'git rev-parse --short HEAD').trim()
+          env.IMAGE_TAG = "${env.ECR_REGISTRY}/${env.APP_NAME}:${env.GIT_SHA}"
+        }
+      }
+    }
+
+    stage('Lint + Unit Tests') {
+      steps {
+        container('python') {
+          sh '''
+            pip install -r requirements.txt -r requirements-dev.txt
+            ruff check src/
+            mypy src/
+            pytest --junitxml=test-results.xml --cov=src --cov-report=xml
+          '''
+        }
+      }
+      post {
+        always {
+          junit 'test-results.xml'
+          recordCoverage(tools: [[parser: 'COBERTURA', pattern: 'coverage.xml']])
+        }
+      }
+    }
+
+    stage('Build Image (Kaniko)') {
+      steps {
+        container('kaniko') {
+          withCredentials([usernamePassword(credentialsId: 'aws-creds',
+            usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+            sh """
+              echo '{"credsStore":"ecr-login"}' > /kaniko/.docker/config.json
+              /kaniko/executor \
+                --context \$WORKSPACE \
+                --dockerfile \$WORKSPACE/Dockerfile \
+                --destination ${env.IMAGE_TAG} \
+                --cache=true \
+                --cache-repo ${env.ECR_REGISTRY}/${env.APP_NAME}/cache \
+                --build-arg VERSION=${env.GIT_SHA}
+            """
+          }
+        }
+      }
+    }
+
+    stage('Image Scan (Trivy)') {
+      steps {
+        container('trivy') {
+          sh """
+            trivy image --severity CRITICAL,HIGH \
+              --exit-code 1 \
+              --format json \
+              --output trivy-report.json \
+              ${env.IMAGE_TAG}
+          """
+        }
+      }
+      post {
+        always {
+          archiveArtifacts artifacts: 'trivy-report.json', allowEmptyArchive: true
+        }
+      }
+    }
+
+    stage('Sign Image (Cosign keyless)') {
+      when { branch 'main' }
+      steps {
+        container('cosign') {
+          sh """
+            cosign sign --yes \
+              --certificate-identity-regexp 'https://jenkins.example.com/' \
+              --certificate-oidc-issuer 'https://jenkins.example.com' \
+              ${env.IMAGE_TAG}
+          """
+        }
+      }
+    }
+
+    stage('Update GitOps Manifest') {
+      when { branch 'main' }
+      steps {
+        sshagent(credentials: ['gitops-deploy-key']) {
+          sh """
+            git clone ${env.GITOPS_REPO} gitops
+            cd gitops
+            sed -i 's|image: ${env.ECR_REGISTRY}/${env.APP_NAME}:.*|image: ${env.IMAGE_TAG}|' \
+              overlays/prod/kustomization.yaml
+            git config user.email 'jenkins@example.com'
+            git config user.name 'Jenkins'
+            git add overlays/prod/kustomization.yaml
+            git commit -m 'deploy ${env.APP_NAME} ${env.GIT_SHA}'
+            git push origin main
+          """
+        }
+      }
+    }
+
+    stage('Verify ArgoCD Sync') {
+      when { branch 'main' }
+      steps {
+        container('kubectl') {
+          withCredentials([file(credentialsId: 'kubeconfig-prod', variable: 'KUBECONFIG')]) {
+            sh """
+              kubectl rollout status deployment/${env.APP_NAME} -n prod --timeout=10m
+              kubectl get pods -n prod -l app=${env.APP_NAME}
+            """
+          }
+        }
+      }
+    }
+  }
+
+  post {
+    success {
+      slackSend(channel: '#deploys', color: 'good',
+                message: "✅ ${env.JOB_NAME} #${env.BUILD_NUMBER} deployed ${env.APP_NAME}:${env.GIT_SHA}")
+    }
+    failure {
+      slackSend(channel: '#deploys', color: 'danger',
+                message: "❌ ${env.JOB_NAME} #${env.BUILD_NUMBER} failed at ${env.STAGE_NAME}")
+    }
+  }
+}
