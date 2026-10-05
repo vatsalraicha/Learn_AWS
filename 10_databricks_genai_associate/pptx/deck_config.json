@@ -1,0 +1,166 @@
+{
+  "slug": "Databricks_GenAI_Associate",
+  "cert_name": "Databricks Certified Generative AI Engineer Associate",
+  "exam_version": "March 18, 2026",
+  "logistics": {
+    "Question count": "45 scored (multi-choice + multi-select: 'Select TWO/THREE')",
+    "Duration": "90 minutes (~2 min / question)",
+    "Passing score": "~70% (\u2248 32/45) [community]",
+    "Cost": "$200 USD + tax",
+    "Validity": "2 years",
+    "Retake wait": "~14 days [community]",
+    "Delivery": "Online proctored (Kryterion WebAssessor)",
+    "Languages": "English, JP, BR-PT, KR"
+  },
+  "domains": [
+    [
+      "Domain 1 \u2014 Design Applications",
+      "14%",
+      [
+        "Use case framing: when GenAI vs classical ML",
+        "RAG vs fine-tuning vs prompting tradeoffs",
+        "Choosing chunk strategy by document type",
+        "Latency / cost / quality tradeoffs"
+      ]
+    ],
+    [
+      "Domain 2 \u2014 Data Preparation",
+      "14%",
+      [
+        "Chunking strategies: fixed, semantic, recursive, document-aware",
+        "Embedding model selection (BGE, E5, OpenAI, Databricks GTE)",
+        "Vector index types: Delta Sync (auto-update) vs Direct Access",
+        "Mosaic AI Vector Search hybrid retrieval (vector + keyword)"
+      ]
+    ],
+    [
+      "Domain 3 \u2014 Application Development",
+      "30%",
+      [
+        "Prompt engineering: few-shot, CoT, structured output",
+        "RAG chains: ChatModel + retriever + prompt",
+        "Mosaic AI Agent Framework (mlflow.langchain.log_model)",
+        "Agent Bricks for low-code agent assembly",
+        "Tool calling and structured outputs"
+      ]
+    ],
+    [
+      "Domain 4 \u2014 Assembling & Deploying",
+      "22%",
+      [
+        "Mosaic AI Model Serving endpoints \u2014 pay-per-token vs provisioned throughput",
+        "Foundation Model APIs: DBRX, Llama, Mixtral, GTE",
+        "Databricks Apps as UI layer (Streamlit, Dash, Gradio, Flask)",
+        "CI/CD for agents via DABs (Databricks Asset Bundles)"
+      ]
+    ],
+    [
+      "Domain 5 \u2014 Governance",
+      "8%",
+      [
+        "AI Gateway: rate limits, budget caps, audit logs",
+        "Guardrails: input/output content filtering",
+        "PII detection and redaction",
+        "UC permissions on models, indexes, functions"
+      ]
+    ],
+    [
+      "Domain 6 \u2014 Evaluation & Monitoring",
+      "12%",
+      [
+        "MLflow LLM Evaluate, mlflow.evaluate() with judges",
+        "Custom metrics + LLM-as-judge",
+        "Inference Tables for production monitoring",
+        "Lakehouse Monitoring for endpoint drift"
+      ]
+    ]
+  ],
+  "lookalikes": [
+    [
+      "Delta Sync Index",
+      "Auto-syncs with source Delta table \u2014 managed embeddings"
+    ],
+    [
+      "Direct Access Index",
+      "You manage embedding writes \u2014 manual upsert API"
+    ],
+    [
+      "Pay-per-token endpoint",
+      "No infra cost; per-1k-token billing; shared capacity"
+    ],
+    [
+      "Provisioned throughput",
+      "Dedicated capacity; predictable latency; hourly cost"
+    ],
+    [
+      "mlflow.langchain.log_model",
+      "Logs LC chain as MLflow PyFunc"
+    ],
+    [
+      "mlflow.pyfunc.log_model",
+      "Generic wrapper; manual code"
+    ],
+    [
+      "Agent Framework",
+      "Code-first: build chains with code"
+    ],
+    [
+      "Agent Bricks",
+      "Low-code wizard: declarative agent assembly"
+    ],
+    [
+      "RAG",
+      "Retrieve-then-generate; cheap, current, citable"
+    ],
+    [
+      "Fine-tuning",
+      "Weight updates; expensive; style/domain shift"
+    ]
+  ],
+  "facts_to_memorize": [
+    "Vector Search index types: Delta Sync (managed) vs Direct Access (manual)",
+    "Mosaic AI Vector Search supports HYBRID search out of the box",
+    "Foundation Model APIs: pay-per-token shared vs provisioned dedicated",
+    "DBRX, Llama 3.x, Mixtral, GTE embeddings available as FM APIs",
+    "Agents are logged via mlflow.langchain.log_model or mlflow.pyfunc.log_model",
+    "AI Gateway: rate limits, budget caps, PII detection, audit logs",
+    "Inference Tables auto-capture request/response for endpoints",
+    "Lakehouse Monitoring detects drift on endpoint Inference Tables",
+    "Databricks Apps replace Mosaic AI App; deploy via DABs"
+  ],
+  "pitfalls": [
+    "Choosing fine-tuning when RAG would solve it (cost trap)",
+    "Forgetting hybrid search exists \u2014 pure semantic misses keyword-anchored queries",
+    "Using a Direct Access index when Delta Sync would auto-update for free",
+    "Skipping signature on agent log_model \u2014 endpoint Test UI breaks",
+    "Confusing AI Gateway with Model Serving (gateway sits in front)",
+    "Forgetting MLflow evaluate() built-in metrics (toxicity, faithfulness, answer_correctness)",
+    "Provisioning throughput for traffic too low to amortize the hourly cost",
+    "Not enabling Inference Tables before launch \u2014 no monitoring data afterward"
+  ],
+  "study_weeks": [
+    [
+      "Week 1",
+      "Domains 1-2 (28%) \u2014 design + data prep; chunking + embeddings"
+    ],
+    [
+      "Week 2",
+      "Domain 3 (30%) \u2014 prompt eng, RAG chains, agents"
+    ],
+    [
+      "Week 3",
+      "Domain 4 (22%) \u2014 serving + apps + CI/CD"
+    ],
+    [
+      "Week 4",
+      "Domains 5-6 (20%) \u2014 governance + evaluation; final quizzes + exam"
+    ]
+  ],
+  "resources": [
+    "Official exam guide PDF (March 18, 2026)",
+    "Databricks Academy: Generative AI Engineering Associate Pathway",
+    "Career_upskill Topic 10 modules 01-15 + 6 quizzes",
+    "FACTS.md \u2014 exam logistics + objective mapping",
+    "Mosaic AI docs: Agent Framework, Agent Bricks, Vector Search"
+  ]
+}
