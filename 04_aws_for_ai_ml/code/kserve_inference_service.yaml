@@ -1,0 +1,179 @@
+# KServe InferenceService — Capital One-style ML serving on EKS
+#
+# Pattern:
+#   - Transformer pod: input validation + Databolt token swap
+#   - Predictor pod: Triton with GPU (model from S3, IRSA-based)
+#   - NeMo Guardrails sidecar for LLM safety
+#   - Istio for traffic management (blue/green via VirtualService)
+#   - Karpenter provisions GPU nodes on-demand
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kserve-card-fraud
+  namespace: ml-prod
+  annotations:
+    # Pod Identity Agent maps this SA to an IAM role
+    eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/KServeCardFraudRole
+
+---
+
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: card-fraud
+  namespace: ml-prod
+  annotations:
+    # Raw Deployment mode (vs Knative) - preferred at scale
+    serving.kserve.io/deploymentMode: "RawDeployment"
+    # Karpenter node selector
+    karpenter.sh/nodepool: gpu-inference
+spec:
+  predictor:
+    serviceAccountName: kserve-card-fraud
+    minReplicas: 2
+    maxReplicas: 50
+    scaleTarget: 80    # 80% utilization target
+    scaleMetric: cpu
+    canaryTrafficPercent: 10
+    triton:
+      storageUri: s3://co-card-prd-models/fraud/v3/
+      runtimeVersion: "24.06-py3"
+      resources:
+        requests:
+          cpu: 4
+          memory: 16Gi
+          nvidia.com/gpu: 1
+        limits:
+          cpu: 8
+          memory: 32Gi
+          nvidia.com/gpu: 1
+      env:
+        - name: MODEL_REPOSITORY
+          value: /mnt/models
+        - name: TRITON_LOG_VERBOSE
+          value: "0"
+    nodeSelector:
+      karpenter.sh/nodepool: gpu-inference
+    tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+
+  transformer:
+    containers:
+      - name: transformer
+        image: 123.dkr.ecr.us-east-1.amazonaws.com/co-card/transformer:v3.1
+        env:
+          - name: DATABOLT_TOKEN_SERVICE_URL
+            value: "https://databolt.internal:9443"
+          - name: TRANSFORMER_MODE
+            value: "tokenize-then-predict"
+        resources:
+          requests:
+            cpu: 1
+            memory: 2Gi
+          limits:
+            cpu: 2
+            memory: 4Gi
+
+  explainer:
+    alibi:
+      type: AnchorTabular
+      storageUri: s3://co-card-prd-models/fraud/v3/explainer
+
+---
+
+# Istio VirtualService for blue/green traffic management
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: card-fraud-vs
+  namespace: ml-prod
+spec:
+  hosts:
+    - card-fraud.ml-prod.svc.cluster.local
+  http:
+    - match:
+        - headers:
+            x-canary:
+              exact: "true"
+      route:
+        - destination:
+            host: card-fraud-predictor-canary
+          weight: 100
+    - route:
+        - destination:
+            host: card-fraud-predictor-default
+          weight: 90
+        - destination:
+            host: card-fraud-predictor-canary
+          weight: 10
+
+---
+
+# KEDA ScaledObject — scale on SQS queue depth (not just CPU)
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: card-fraud-scaler
+  namespace: ml-prod
+spec:
+  scaleTargetRef:
+    apiVersion: serving.kserve.io/v1beta1
+    kind: InferenceService
+    name: card-fraud
+  minReplicaCount: 2
+  maxReplicaCount: 100
+  pollingInterval: 15
+  cooldownPeriod: 300
+  triggers:
+    - type: aws-sqs-queue
+      metadata:
+        queueURL: https://sqs.us-east-1.amazonaws.com/123456789012/card-fraud-requests
+        queueLength: "10"
+        awsRegion: "us-east-1"
+        identityOwner: pod   # use pod's IAM role (IRSA / Pod Identity)
+
+---
+
+# Karpenter NodePool for GPU inference
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: gpu-inference
+spec:
+  template:
+    metadata:
+      labels:
+        nodepool: gpu-inference
+    spec:
+      requirements:
+        - key: node.kubernetes.io/instance-type
+          operator: In
+          values:
+            - g5.xlarge
+            - g5.2xlarge
+            - g6e.xlarge
+            - g6e.2xlarge
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: ["on-demand", "spot"]
+        - key: kubernetes.io/arch
+          operator: In
+          values: ["amd64"]
+      taints:
+        - key: nvidia.com/gpu
+          value: "true"
+          effect: NoSchedule
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: gpu-inference
+  disruption:
+    consolidationPolicy: WhenEmptyOrUnderutilized
+    consolidateAfter: 30s
+  limits:
+    cpu: 1000
+    memory: 4000Gi
+    nvidia.com/gpu: 80

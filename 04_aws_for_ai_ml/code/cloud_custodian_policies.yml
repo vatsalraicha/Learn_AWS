@@ -1,0 +1,204 @@
+# Cloud Custodian policies — Capital One-style governance
+# Run mode: pull (scheduled Lambda) or event (real-time CloudTrail-driven)
+# Always test with --dryrun first
+
+policies:
+  # ==========================================================
+  # Tag enforcement
+  # ==========================================================
+  - name: ec2-mark-untagged-for-stop
+    resource: ec2
+    filters:
+      - State.Name: running
+      - or:
+          - "tag:CostCenter": absent
+          - "tag:Environment": absent
+          - "tag:Owner": absent
+    actions:
+      - type: mark-for-op
+        tag: c7n_status
+        op: stop
+        days: 4
+      - type: notify
+        to: [ml-platform-team@example.com]
+        subject: "[Custodian] Untagged EC2 will be stopped in 4 days"
+        transport:
+          type: sns
+          topic: arn:aws:sns:us-east-1:123456789012:c1-governance-alerts
+
+  - name: ec2-stop-untagged-after-mark
+    resource: ec2
+    filters:
+      - type: marked-for-op
+        tag: c7n_status
+        op: stop
+    actions:
+      - type: stop
+      - type: notify
+        to: [ml-platform-team@example.com]
+        subject: "[Custodian] Stopped untagged EC2 instance"
+        transport:
+          type: sns
+          topic: arn:aws:sns:us-east-1:123456789012:c1-governance-alerts
+
+  # ==========================================================
+  # Post-2019-breach: enforce IMDSv2
+  # ==========================================================
+  - name: ec2-enforce-imdsv2
+    resource: ec2
+    filters:
+      - type: metadata-options
+        key: HttpTokens
+        value: optional
+    actions:
+      - type: set-metadata-access
+        tokens: required
+        hop_limit: 1
+      - type: notify
+        to: [security-ops@example.com]
+        subject: "[Custodian] Enforced IMDSv2 on EC2 (was optional)"
+        transport:
+          type: sns
+          topic: arn:aws:sns:us-east-1:123456789012:c1-security-alerts
+
+  # ==========================================================
+  # S3: block public buckets (the 2019 breach origin)
+  # ==========================================================
+  - name: s3-block-public-buckets
+    resource: s3
+    description: |
+      Detect S3 buckets without Block Public Access enabled and remediate.
+      This single policy would have prevented the 2019 Capital One breach.
+    filters:
+      - or:
+          - type: bucket-public-block
+            BlockPublicAcls: false
+          - type: bucket-public-block
+            BlockPublicPolicy: false
+          - type: bucket-public-block
+            IgnorePublicAcls: false
+          - type: bucket-public-block
+            RestrictPublicBuckets: false
+    actions:
+      - type: set-public-block
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      - type: notify
+        to: [security-ops@example.com]
+        subject: "[Custodian] Enforced Block Public Access on S3 bucket"
+        transport:
+          type: sns
+          topic: arn:aws:sns:us-east-1:123456789012:c1-security-alerts
+
+  # ==========================================================
+  # S3: require SSE-KMS encryption
+  # ==========================================================
+  - name: s3-require-sse-kms
+    resource: s3
+    filters:
+      - or:
+          - type: bucket-encryption
+            state: false
+          - type: bucket-encryption
+            crypto: AES256  # Not SSE-KMS
+    actions:
+      - type: notify
+        to: [security-ops@example.com]
+        subject: "[Custodian] S3 bucket missing SSE-KMS"
+        transport:
+          type: sns
+          topic: arn:aws:sns:us-east-1:123456789012:c1-security-alerts
+
+  # ==========================================================
+  # RDS: enforce encryption at rest
+  # ==========================================================
+  - name: rds-require-encryption
+    resource: rds
+    filters:
+      - StorageEncrypted: false
+    actions:
+      - type: notify
+        to: [security-ops@example.com]
+        subject: "[Custodian] Unencrypted RDS instance detected"
+        transport:
+          type: sns
+          topic: arn:aws:sns:us-east-1:123456789012:c1-security-alerts
+
+  # ==========================================================
+  # Cost: idle SageMaker endpoints
+  # ==========================================================
+  - name: sagemaker-stop-idle-endpoints
+    resource: sagemaker-endpoint
+    description: Stop SageMaker endpoints with no invocations for 7 days
+    filters:
+      - type: metrics
+        name: Invocations
+        statistics: Sum
+        days: 7
+        value: 0
+        op: equal
+      - "tag:KeepAlive": absent  # explicit opt-out
+    actions:
+      - type: delete
+      - type: notify
+        to: [ml-platform-team@example.com]
+        subject: "[Custodian] Deleted idle SageMaker endpoint"
+        transport:
+          type: sns
+          topic: arn:aws:sns:us-east-1:123456789012:c1-cost-alerts
+
+  # ==========================================================
+  # Cost: orphan EBS volumes
+  # ==========================================================
+  - name: ebs-delete-orphans
+    resource: ebs
+    filters:
+      - State: available  # not attached
+      - type: tag-count
+        count: 1  # only has c7n metadata
+    actions:
+      - type: snapshot
+        copy-tags: ["CostCenter", "Owner"]
+      - type: delete
+      - type: notify
+        to: [ml-platform-team@example.com]
+        subject: "[Custodian] Snapshotted+deleted orphaned EBS volume"
+        transport:
+          type: sns
+          topic: arn:aws:sns:us-east-1:123456789012:c1-cost-alerts
+
+  # ==========================================================
+  # IAM: detect inline policies (anti-pattern)
+  # ==========================================================
+  - name: iam-detect-inline-policies
+    resource: iam-role
+    filters:
+      - type: has-inline-policy
+    actions:
+      - type: notify
+        to: [security-ops@example.com]
+        subject: "[Custodian] IAM role with inline policy detected"
+        transport:
+          type: sns
+          topic: arn:aws:sns:us-east-1:123456789012:c1-security-alerts
+
+  # ==========================================================
+  # Lambda: detect overly-permissive functions
+  # ==========================================================
+  - name: lambda-detect-admin-role
+    resource: lambda
+    filters:
+      - type: has-statement
+        statements:
+          - Effect: Allow
+            Action: "*"
+            Resource: "*"
+    actions:
+      - type: notify
+        to: [security-ops@example.com]
+        subject: "[Custodian] Lambda with admin-equivalent role"
+        transport:
+          type: sns
+          topic: arn:aws:sns:us-east-1:123456789012:c1-security-alerts
