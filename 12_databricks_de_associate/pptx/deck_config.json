@@ -1,0 +1,170 @@
+{
+  "slug": "Databricks_DE_Associate",
+  "cert_name": "Databricks Certified Data Engineer Associate",
+  "exam_version": "July 25, 2025",
+  "logistics": {
+    "Question count": "45 scored (ALL single-select)",
+    "Duration": "90 minutes (~2 min / question)",
+    "Passing score": "80% (\u2248 36/45) \u2014 RAISED from 70% in July 2025 refresh",
+    "Cost": "$200 USD + tax",
+    "Validity": "2 years",
+    "Retake wait": "14 days after 1st fail; 30 days after subsequent",
+    "Delivery": "Online proctored OR in-person test center",
+    "Code language": "SQL when possible; otherwise Python (PySpark)"
+  },
+  "domains": [
+    [
+      "Domain 1 \u2014 Databricks Intelligence Platform",
+      "10%",
+      [
+        "Lakehouse architecture, medallion (bronze/silver/gold)",
+        "Workspace, clusters (all-purpose vs job), DBR runtime",
+        "Notebooks, SQL Warehouses, repos",
+        "Pricing: DBU types, photon multiplier"
+      ]
+    ],
+    [
+      "Domain 2 \u2014 Development and Ingestion",
+      "30%",
+      [
+        "Delta Lake: ACID, transaction log _delta_log, VACUUM, OPTIMIZE",
+        "Auto Loader: cloudFiles, schema inference, evolution modes",
+        "COPY INTO vs Auto Loader tradeoffs",
+        "Ingestion patterns: append, merge, upsert",
+        "Schema evolution: rescue, addNewColumns, failOnNewColumns"
+      ]
+    ],
+    [
+      "Domain 3 \u2014 Data Processing & Transformations",
+      "31%",
+      [
+        "PySpark + Spark SQL transformations",
+        "Structured Streaming: trigger modes, watermarks, state",
+        "MERGE INTO syntax: matched/not matched / by source",
+        "Window functions, joins, CTEs",
+        "Photon acceleration scope"
+      ]
+    ],
+    [
+      "Domain 4 \u2014 Productionizing Data Pipelines",
+      "18%",
+      [
+        "LakeFlow Declarative Pipelines (formerly DLT)",
+        "LakeFlow Jobs (formerly Workflows)",
+        "DABs for DE: bundle.yml, resources.pipelines, resources.jobs",
+        "Triggers, dependencies, retries, alerts"
+      ]
+    ],
+    [
+      "Domain 5 \u2014 Data Governance & Quality",
+      "11%",
+      [
+        "Unity Catalog: catalog.schema.table, grants, lineage",
+        "Delta Sharing (open source vs Databricks-to-Databricks)",
+        "Lakehouse Federation (foreign catalogs)",
+        "Expectations: EXPECT, EXPECT...DROP, EXPECT...FAIL"
+      ]
+    ]
+  ],
+  "lookalikes": [
+    [
+      "COPY INTO",
+      "Idempotent batch ingest; SQL syntax; remembers files"
+    ],
+    [
+      "Auto Loader (cloudFiles)",
+      "Incremental streaming ingest; file notification or directory listing"
+    ],
+    [
+      "EXPECT",
+      "Log violation; row passes through (default)"
+    ],
+    [
+      "EXPECT ... ON VIOLATION DROP",
+      "Filter out violating rows"
+    ],
+    [
+      "EXPECT ... ON VIOLATION FAIL",
+      "Abort the update"
+    ],
+    [
+      "OPTIMIZE",
+      "Compacts small files (default ~1GB target)"
+    ],
+    [
+      "VACUUM",
+      "Removes files past retention threshold (default 7 days)"
+    ],
+    [
+      "ZORDER BY",
+      "Multi-column data skipping; combined with OPTIMIZE"
+    ],
+    [
+      "Liquid Clustering",
+      "Replaces ZORDER + partitioning; auto-evolves"
+    ],
+    [
+      "MERGE INTO ... WHEN MATCHED",
+      "Update/delete existing rows"
+    ],
+    [
+      "MERGE INTO ... WHEN NOT MATCHED BY SOURCE",
+      "Delete rows missing from source"
+    ],
+    [
+      "LakeFlow Declarative Pipelines",
+      "New name for DLT"
+    ],
+    [
+      "LakeFlow Jobs",
+      "New name for Workflows"
+    ]
+  ],
+  "facts_to_memorize": [
+    "Passing score is 80% \u2014 RAISED in July 2025 refresh",
+    "All questions are single-select \u2014 no multi-select on this exam",
+    "VACUUM default retention: 7 days (cannot go below 0; force needed under 7d)",
+    "OPTIMIZE default target file size: ~1 GB (auto-tunes by table size)",
+    "Auto Loader schema modes: addNewColumns (default), rescue, failOnNewColumns, none",
+    "Delta transaction log = _delta_log/*.json + *.checkpoint.parquet",
+    "checkpoint every 10 commits by default",
+    "DLT renamed to LakeFlow Declarative Pipelines; Workflows \u2192 LakeFlow Jobs",
+    "UC three-level namespace required; INFORMATION_SCHEMA per-catalog",
+    "Delta Sharing: open protocol + recipient credential"
+  ],
+  "pitfalls": [
+    "Assuming 70% passing score \u2014 it's 80% on July 2025 guide",
+    "Confusing COPY INTO (batch, idempotent) with Auto Loader (streaming, incremental)",
+    "VACUUM with retention <7 days requires retentionDurationCheck.enabled=false",
+    "Forgetting that MERGE BY SOURCE clauses are separate from BY TARGET",
+    "Using DLT terminology when the exam now uses LakeFlow naming",
+    "Schema evolution: 'rescue' silently captures bad data \u2014 read the column!",
+    "Photon doesn't accelerate every operation \u2014 UDFs and some functions opt-out",
+    "Expectations without ON VIOLATION just log \u2014 rows still pass through"
+  ],
+  "study_weeks": [
+    [
+      "Week 1",
+      "Domains 1+2 (40%) \u2014 platform basics + Delta + Auto Loader"
+    ],
+    [
+      "Week 2",
+      "Domain 3 (31%) \u2014 transformations + Structured Streaming"
+    ],
+    [
+      "Week 3",
+      "Domain 4 (18%) \u2014 LakeFlow pipelines + jobs + DABs"
+    ],
+    [
+      "Week 4",
+      "Domain 5 + final review \u2014 UC, Delta Sharing, expectations"
+    ]
+  ],
+  "resources": [
+    "Official exam guide PDF (July 25, 2025)",
+    "Databricks Academy: Data Engineer Associate Learning Path",
+    "Career_upskill Topic 12 modules 01-16 + 5 quizzes",
+    "FACTS.md \u2014 80% pass threshold, single-select, LakeFlow naming",
+    "Delta Lake docs + Auto Loader docs"
+  ]
+}
