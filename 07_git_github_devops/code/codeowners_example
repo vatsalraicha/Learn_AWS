@@ -1,0 +1,58 @@
+# CODEOWNERS — Capital One-style template
+# Drop in .github/CODEOWNERS
+#
+# Last matching rule wins. Order broad → specific.
+# Owners need WRITE access to be effective (else silently ignored).
+# Teams referenced with @org/team-name.
+
+# Default — platform team reviews unrouted PRs
+*                                       @capitalone/ml-platform
+
+# Configuration & infrastructure
+/.github/                               @capitalone/devops
+/.github/workflows/                     @capitalone/devops @capitalone/security
+/.github/CODEOWNERS                     @capitalone/platform-leads @capitalone/security
+/.github/dependabot.yml                 @capitalone/security
+/infra/                                 @capitalone/devops
+/infra/cdk/                             @capitalone/devops @capitalone/cloud-architecture
+**/Dockerfile                           @capitalone/devops @capitalone/security
+**/*.tf                                 @capitalone/devops
+**/*.yaml                               @capitalone/devops
+
+# Security-sensitive paths — require security team approval
+/auth/                                  @capitalone/security @capitalone/backend
+/encryption/                            @capitalone/security
+**/secrets/                             @capitalone/security
+SECURITY.md                             @capitalone/security
+
+# ML — model code routes to ML team + model validation
+/src/models/                            @capitalone/ml-team @capitalone/model-validation
+/src/training/                          @capitalone/ml-team
+/src/inference/                         @capitalone/ml-team @capitalone/sre
+/src/features/                          @capitalone/ml-team @capitalone/data-platform
+/configs/training.yaml                  @capitalone/ml-team @capitalone/model-validation
+MODEL_CARD.md                           @capitalone/ml-team @capitalone/model-validation
+
+# Notebooks — ML team owns; SREs don't review
+/notebooks/                             @capitalone/ml-team
+
+# API surface — backend team owns
+/src/api/                               @capitalone/backend
+/src/api/v2/                            @capitalone/backend @capitalone/api-governance
+
+# Tests — service team owns
+/tests/                                 @capitalone/ml-team
+/tests/integration/                     @capitalone/ml-team @capitalone/sre
+
+# Docs — docs team handles broad changes
+/docs/                                  @capitalone/docs
+README.md                               @capitalone/docs @capitalone/ml-platform
+CHANGELOG.md                            @capitalone/ml-platform
+LICENSE                                 @capitalone/legal
+
+# ADRs (Architecture Decision Records) — architecture team
+/docs/adr/                              @capitalone/cloud-architecture @capitalone/ml-team
+
+# Compliance + audit
+/compliance/                            @capitalone/compliance
+/compliance/audit/                      @capitalone/compliance @capitalone/internal-audit
