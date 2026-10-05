@@ -1,0 +1,105 @@
+# KServe InferenceService — production-grade reference
+# References: Topic 05 module 30 (model serving), 26 (EKS data exposure).
+#
+# Capital One stack: RawDeployment mode (not Knative), IRSA-rolled SA → S3 model bucket,
+# resource limits = requests (Guaranteed QoS), PSA-restricted compatible.
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: sentiment-sa
+  namespace: ml-serving
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/ml-serving-sentiment
+automountServiceAccountToken: true   # KServe needs the SA token; container's app does not
+
+---
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: sentiment
+  namespace: ml-serving
+  annotations:
+    serving.kserve.io/deploymentMode: RawDeployment       # not Knative-serverless
+    serving.kserve.io/autoscalerClass: external           # KEDA / HPA
+spec:
+  predictor:
+    serviceAccountName: sentiment-sa
+    minReplicas: 2
+    maxReplicas: 10
+    containerConcurrency: 4
+    timeout: 60
+    pytorch:
+      storageUri: s3://myorg-ml-models/sentiment/v1.4/
+      resources:
+        requests: { cpu: 1, memory: 4Gi, nvidia.com/gpu: 1 }
+        limits:   { cpu: 1, memory: 4Gi, nvidia.com/gpu: 1 }
+      env:
+        - { name: TORCH_HOME, value: /tmp/torch }
+        - { name: TRANSFORMERS_CACHE, value: /tmp/hf }
+
+  # Transformer for tokenization (sidecar)
+  transformer:
+    containers:
+      - name: tokenize
+        image: myorg/sentiment-tokenizer:1.0@sha256:...
+        ports: [{ containerPort: 8080 }]
+        resources:
+          requests: { cpu: 200m, memory: 256Mi }
+          limits:   { cpu: 500m, memory: 512Mi }
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 10001
+          capabilities: { drop: [ALL] }
+        volumeMounts:
+          - { name: tmp, mountPath: /tmp }
+    volumes:
+      - { name: tmp, emptyDir: { sizeLimit: 64Mi } }
+
+---
+# KEDA ScaledObject — autoscale on Prometheus metric (requests_per_second)
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: sentiment-scaler
+  namespace: ml-serving
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: sentiment-predictor-default
+  minReplicaCount: 2
+  maxReplicaCount: 10
+  triggers:
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus.monitoring.svc:9090
+        metricName: kserve_requests_per_second
+        query: sum(rate(kserve_inference_count[1m])) by (deployment)
+        threshold: '50'
+
+---
+# NetworkPolicy — restrict ingress to API gateway, egress to S3/KMS/Secrets Mgr only
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: sentiment-netpol
+  namespace: ml-serving
+spec:
+  podSelector: { matchLabels: { app.kubernetes.io/name: sentiment } }
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector: { matchLabels: { name: api-gateway } }
+      ports: [{ port: 8080 }]
+  egress:
+    - to:
+        - ipBlock: { cidr: 0.0.0.0/0, except: [169.254.169.254/32] }   # block IMDS
+      ports: [{ port: 443 }]
+    # DNS
+    - to:
+        - namespaceSelector: { matchLabels: { name: kube-system } }
+          podSelector: { matchLabels: { k8s-app: kube-dns } }
+      ports: [{ port: 53, protocol: UDP }]

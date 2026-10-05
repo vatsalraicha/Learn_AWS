@@ -1,0 +1,117 @@
+# Kyverno ClusterPolicy: enforce Cosign-signed images + resource limits + PSA-restricted basics
+# References: Topic 05 modules 04 (image signing), 22 (pod security), 23 (admission).
+
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: ml-platform-baseline
+  annotations:
+    policies.kyverno.io/title: "ML platform admission baseline"
+    policies.kyverno.io/category: "Security, Best Practices"
+    policies.kyverno.io/severity: high
+spec:
+  validationFailureAction: Enforce
+  webhookTimeoutSeconds: 30
+  failurePolicy: Fail
+
+  rules:
+    # Require resource limits on all containers
+    - name: require-resource-limits
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: [ml-serving, ml-training, data-pipeline]
+      validate:
+        message: "Resource limits required for all containers"
+        pattern:
+          spec:
+            containers:
+              - resources:
+                  limits:
+                    memory: "?*"
+                    cpu: "?*"
+
+    # Disallow :latest tag
+    - name: disallow-latest-tag
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      validate:
+        message: "Tag :latest is not allowed in production"
+        pattern:
+          spec:
+            containers:
+              - image: "!*:latest"
+
+    # Verify Cosign signature for org images
+    - name: verify-cosign-signed
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      verifyImages:
+        - imageReferences:
+            - "ghcr.io/myorg/*"
+            - "123456789012.dkr.ecr.us-east-1.amazonaws.com/myorg/*"
+          mutateDigest: true
+          required: true
+          attestors:
+            - count: 1
+              entries:
+                - keyless:
+                    subject:    "https://github.com/myorg/*"
+                    issuer:     "https://token.actions.githubusercontent.com"
+                    rekor:      { url: "https://rekor.sigstore.dev" }
+
+    # Require IRSA annotation on SA referenced by pod
+    - name: require-irsa-on-sa
+      match:
+        any:
+          - resources:
+              kinds: [ServiceAccount]
+              namespaces: [ml-serving, ml-training]
+      validate:
+        message: "ServiceAccounts in ML namespaces must have IRSA annotation eks.amazonaws.com/role-arn"
+        pattern:
+          metadata:
+            annotations:
+              eks.amazonaws.com/role-arn: "arn:aws:iam::*:role/*"
+
+    # PSA-restricted: no privileged, no host network/pid/ipc
+    - name: psa-baseline
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: [ml-serving, ml-training, data-pipeline]
+      validate:
+        message: "PSA baseline: privileged/hostNetwork/hostPID/hostIPC forbidden"
+        pattern:
+          spec:
+            =(hostNetwork): false
+            =(hostPID): false
+            =(hostIPC): false
+            containers:
+              - =(securityContext):
+                  =(privileged): false
+                  =(allowPrivilegeEscalation): false
+
+    # Require non-root user
+    - name: require-non-root
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: [ml-serving, ml-training, data-pipeline]
+      validate:
+        message: "Pods must run as non-root"
+        anyPattern:
+          - spec:
+              securityContext:
+                runAsNonRoot: true
+          - spec:
+              containers:
+                - securityContext:
+                    runAsNonRoot: true
